@@ -1,0 +1,23 @@
+# Template: Niagara VFX Authoring (create system → add emitter → add module → verify)
+# Verified: 2026-08-29 UE5.8 EN (AddEmitter/AddModule/topology readback-verified; asset saved to disk)
+
+--- Steps (exact calls, all verified) ---
+
+1. Create system from template: NiagaraToolset_System.CreateNiagaraSystem(assetPath="/Game/TN/NS_Name",
+   assetName="NS_Name", templateSystem="/Niagara/DefaultAssets/Templates/Systems/FountainLightweight.FountainLightweight")
+   — templateSystem needs OBJECT path (dot suffix). NOTE: template-copied emitters can be HOLLOW
+   (scripts/modules None, rendererClasses empty, "emitter data is invalid" on writes) — see step 3.
+2. Read: GetSystemSummary(system=ref) → emitters list; GetEmitterTopology(emitterRef=6-field-ref)
+   — emitterRef = {system, emitterName, scriptName:"", moduleName:"", rendererIndex:-1, inputNameStack:[]}
+3. Add emitter (the reliable write): AddEmitter(system=ref, emitterName="MyBurst",
+   templateEmitter="/Niagara/DefaultAssets/Templates/Emitters/SimpleSpriteBurst.SimpleSpriteBurst")
+   — OBJECT path again. Fresh emitters arrive COMPLETE (renderer + state modules).
+4. Add module: AddModule(moduleAsset="/Niagara/Modules/Update/Color/ScaleColor.ScaleColor",
+   moduleLocationRef={system, emitterName, scriptName:"ParticleUpdateScript", ...})
+   — moduleAsset must be a REAL NiagaraScript asset path (find_assets if guessed path fails);
+     module auto-named ScaleColor001; location ref targets the script stack.
+5. Verify: GetEmitterTopology with scriptName filled; save_assets + disk-verify.
+
+Engine template inventory (find_assets /Niagara): Systems (Fountain/RadialBurst/SimpleExplosion/
+MinimalLightweight/...), Emitters (SimpleSpriteBurst/SingleLoopingParticle/UpwardMeshBurst/StaticBeam/...),
+Modules under /Niagara/Modules/<Stage>/<Category>/<Name>.

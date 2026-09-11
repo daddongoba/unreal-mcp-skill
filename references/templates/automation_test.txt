@@ -1,0 +1,18 @@
+﻿# Template: Automation Test Execution (regression harness)
+# Verified: 2026-08-23 (T8.3), UE5.8 — 8790 discovered, filter run 4/4 passed
+# Requires: AllToolsets; use after ANY C++/BP change for regression check
+
+--- Workflow ---
+
+1. DiscoverTests {} → {"status":"ready"}   (~10s, workers spin up)
+2. GetTestStatus {} → {"state":"Ready","numEnabled":8790,...}
+3. ListTests {nameFilter:"", tagFilter:"", limit:N}   ← ALL THREE params required (SKILL#26)
+   returns test full paths e.g. "AI.ModelContextProtocol.Analytics.HashToolIdentifier..."
+4. RunTestsByFilter {filterExpression:"<substring>"}  ← NOT nameFilter!
+5. wait → GetTestStatus {numComplete, numPassed, numFailed}
+6. GetTestResults / StopTests as needed
+
+--- Use cases ---
+- After C++ LiveCoding/build: filterExpression:"<YourModule>" to run module tests
+- Smoke: any known engine test substring
+- Log false-positive warning: filter GetLogEntries with FULL UNIQUE strings ("DOOR TRIGGERED" not "TRIGGERED" — matches Slate noise)

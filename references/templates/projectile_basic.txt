@@ -1,0 +1,43 @@
+# Template: Basic Projectile (fly forward, destroy on wall hit)
+# Verified: 2026-08-22, UE5.8, English locale, PIE-tested
+# Requires:
+#   - BulletMesh sphere component (PrimitiveTools.add_sphere, radius 10) PROMOTED TO ROOT
+#   - bodyInstance: collisionProfileName="BlockAll", bNotifyRigidBodyCollision=true,
+#     collisionEnabled="QueryAndPhysics", bGenerateOverlapEvents=true
+# MCP calls: add_sphere, set_parent_component, set_properties, write_graph_dsl, compile_blueprint
+
+--- DSL ---
+
+(event EventBeginPlay
+  (Development|PrintString :InString "Bullet Fired"))
+
+(event EventTick (DeltaSeconds)
+  (bind fwd (Transformation|GetActorForwardVector))
+  (bind speed (* 3000.0 DeltaSeconds))
+  (bind moveVec (Math|Vector|MakeVector :X (* (.x fwd) speed) :Y (* (.y fwd) speed) :Z (* (.z fwd) speed)))
+  (Transformation|AddActorWorldOffset :DeltaLocation moveVec :bSweep true :bTeleport false))
+
+(event AddEvent|Collision|EventHit
+  (Actor|DestroyActor :self self))
+
+--- Steps ---
+
+1. BlueprintTools.create  {"folder_path":"/Game","asset_name":"BP_Projectile","asset_type":{"refPath":"/Script/Engine.Actor"}}
+2. BlueprintTools.get_default_object  {"blueprint":"<BP_REF>"}  → CDO ref
+3. PrimitiveTools.add_sphere  {"actor":"<CDO>","name":"BulletMesh","radius":10}
+4. ActorTools.set_parent_component  # promote mesh to ROOT (critical for sweep!)
+   {"component":"<BP>_C:BulletMesh_GEN_VARIABLE",
+    "parent":"<BP>_C:DefaultSceneRoot_GEN_VARIABLE"}   # make DSR child of mesh
+5. ObjectTools.set_properties  {"instance":"<BP>_C:BulletMesh_GEN_VARIABLE",
+   "values":"{\"bodyInstance\":{\"collisionProfileName\":\"BlockAll\",\"bNotifyRigidBodyCollision\":true,\"collisionEnabled\":\"QueryAndPhysics\"},\"bGenerateOverlapEvents\":true}"}
+6. BlueprintTools.write_graph_dsl  {"graph":"<GRAPH_REF>","code":"<DSL above>"}
+7. BlueprintTools.compile_blueprint  {"blueprint":"<BP_REF>"}
+8. Spawner side: create SpaceBar node via create_node ("Input|KeyboardEvents|SpaceBar"),
+   then ProgrammaticToolset script wires Pressed -> SpawnActor(Class="/Game/BP_Projectile.BP_Projectile_C",
+   CollisionHandlingOverride="AlwaysSpawn") — see dsl_syntax.md 3.5
+
+--- Verify ---
+
+PIE: spawn a wall (StaticMeshActor + add_cube, BlockAll) in bullet path.
+Press Space → bullet flies forward 3000 uu/s → hits wall → disappears instantly.
+If it passes through: mesh is not root, or bSweep not true (Pitfalls #7 #8).

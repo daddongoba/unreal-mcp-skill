@@ -1,0 +1,26 @@
+﻿# Template: C++ Class + UBT Compile + BP Inheritance
+# Verified: 2026-08-23 (T4.1/T4.3), UE5.8 — class registered, UPROPERTY reflected to BP child
+# Requires: VS2019+; .NET 10 via DOTNET_ROOT (engine-bundled); UE CLOSED for full build
+
+--- Steps ---
+
+1. WRITE Source/<Module>/<Class>.h + .cpp (UCLASS/GENERATED_BODY/UPROPERTY(EditAnywhere,BlueprintReadWrite))
+
+2. ENV (every shell):
+   $env:DOTNET_ROOT = "E:\UE_5.8\Engine\Binaries\ThirdParty\DotNet\10.0\win-x64"
+   $env:PATH = "$env:DOTNET_ROOT;$env:PATH"          ← #25
+
+3. CLOSE UE EDITOR first (Live Coding lock: "Unable to build while Live Coding is active")
+
+4. FULL BUILD:
+   & "E:\UE_5.8\Engine\Build\BatchFiles\Build.bat" <Proj>Editor Win64 Development -Project="X.uproject" -WaitMutex
+   (~20s incremental; "Result: Succeeded")
+
+5. RELAUNCH UE with -ModelContextProtocolStartServer
+   ⚠ First C++ launch may pop "Restore Packages" (NuGet/firwall #18) → WM_CLOSE it (screen_control.md)
+
+6. VERIFY: spawn via add_to_scene_from_class(/Script/<Module>.<Class>)
+   BP child: BlueprintTools.create(asset_type=/Script/<Module>.<Class>)
+   Reflection: get_default_object → get_properties(["Prop"]) returns values
+
+--- Pitfalls encoded: SKILL#25(.NET10+firewall), #18(native dialogs), LC lock ---

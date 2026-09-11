@@ -1,0 +1,24 @@
+# Template: ControlRig Authoring Chain (rig create → bones → controls → track → pose/key calls)
+# Verified: 2026-08-29 UE5.8 EN — END-TO-END VERIFIED incl. VISUAL (viewport f0-vs-f60 capture shows bone bent 90deg)
+# RESOLVED 2026-08-29: get_rotator reads editor-static state (0.0) even when animation works — verify VISUALLY via set_playhead_frame + CaptureViewport frame comparison
+
+--- Steps (exact param combos, all battle-tested) ---
+
+1. Create rig: ControlRigTools.create(path="/Game/TN/CR_Name")
+2. Import bones: import_bones_from_asset(control_rig=ref, skeletal_mesh=ref)  ← mesh NOT skeleton
+   (mesh must have VALID skeleton — cross-project copied .uassets have broken skeleton refs and
+    set_properties CANNOT fix asset-level Skeleton; only meshes with intact skeletons import)
+3. Add controls: add_control(control_rig=ref, name="Ctrl_X", bone="BoneName") → get_all_controls verify
+4. Sequence: SequencerTools.create_level_sequence(package_path, asset_name) → open_sequence
+5. Bind skeletal actor: add_actors(actors=[live ref]) → get_bindings → bindingId
+6. CR track: SequencerControlRigTools.find_or_create_track(sequence, binding={bindingId,sequence},
+   control_rig_asset_path="/Game/.../CR_X.CR_X")
+7. Section exists by default on CR track (get_sections → MovieSceneControlRigParameterSection_0)
+8. Pose: set_rotator(sequence, control_rig_asset_path, control_name, frame, value={pitch,yaw,roll})
+9. Key: key_controls(section=ref, control_rig_asset_path, control_names=["..."], frame)
+   - key_controls wants SECTION, set_rotator wants SEQUENCE; both want control_rig_asset_path
+10. Export FBX: export_fbx(sequence, world=World obj, bindings, fbx_file_path) - WORKS for CR tracks (64.1KB disk-verified 2026-08-29)
+11. VISUAL verify: set_playhead_frame(f) + CaptureViewport + frame comparison (get_rotator reads static state, useless for evaluation)
+
+--- Pitfalls encoded: G12 (param anarchy: control_rig obj vs control_rig_asset_path string varies
+  per call), broken-skeleton imports, CDO component object-refs settable vs instance-level NOT ---

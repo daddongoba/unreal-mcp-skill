@@ -1,0 +1,44 @@
+# Template: AI Asset Import Pipeline (TJGenerators -> UE)
+# Verified: 2026-08-23, UE5.8, English locale, CCC project (image import E2E)
+# Requires: AllToolsets (SlateInspectorToolset), PythonScriptPlugin, AssetTools+LogsToolset
+# Tools: generate_image/generate_3d_model (native) + scripts/import_asset.ps1 + MCP call_tool
+
+--- Pipeline (5 steps) ---
+
+1. GENERATE (native TJGenerators tool)
+   generate_image / generate_3d_model -> task_id -> poll (bg subagent) -> check_task -> CDN URL
+
+2. DOWNLOAD + PREPARE (PowerShell)
+   . scripts/import_asset.ps1 -Url "<CDN URL>" -AssetName "<name>" [-DestPath /Game/AIAssets]
+   -> outputs READY py=<abs path with forward slashes>
+   (template: scripts/py/import_task.template.py; prints IMPORT_DONE paths=[...] when run)
+
+3. EXECUTE IN UE (MCP: SlateInspectorToolset)
+   a. Click  ref=bottom "Output Log" button  (bottom status bar; opens drawer console)
+   b. Snapshot -> find console input: 'textbox [focused]' near bottom (pos ~y=978)
+   c. Type   ref=<that textbox> text="py <READY py path>" submit=true
+   NOTE: drawer auto-collapses on focus loss — Snapshot immediately after Click.
+   NOTE: status-bar Trace combobox (co10) is NOT the console; Tilde key did not work headless.
+
+4. VERIFY LOG (MCP: EditorToolset.LogsToolset)
+   GetLogEntries {category:"", pattern:"IMPORT_DONE|Error", maxEntries:300}
+   Success marker: "LogPython: IMPORT_DONE paths=['/Game/AIAssets/<name>']"
+
+5. VERIFY ASSET (MCP)
+   find_assets {folder_path:"/Game/AIAssets"} -> path present
+   CaptureAssetImage {assetPath:"/Game/AIAssets/<name>"} -> base64 -> save png -> (optional analyze_multimedia)
+
+--- Import matrix ---
+
+| Source        | Format   | UE asset      | Notes                                  |
+|---------------|----------|---------------|----------------------------------------|
+| generate_image| png/jpeg | Texture2D     | jpeg saved as .png imports fine (GDI+) |
+| 3d_model      | glb/fbx  | StaticMesh    | needs Interchange/GLTF (engine built-in); [UNVERIFIED] |
+| sound_effect  | wav      | SoundWave     | [UNVERIFIED]                           |
+| music (mp3)   | mp3      | SoundWave     | [UNVERIFIED — may need wav]            |
+| skybox        | equirect | needs cubemap | [UNVERIFIED — complex]                 |
+
+--- Verify ---
+
+find_assets shows /Game/AIAssets/<name>; CaptureAssetImage thumbnail matches expected content.
+Known pitfalls: write_file needs ABSOLUTE paths (relative resolved to engine cwd); jpeg-in-png ok.

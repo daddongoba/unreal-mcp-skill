@@ -1,0 +1,26 @@
+﻿# Template: UMG Widget (Canvas-first + text + runtime display)
+# Verified: 2026-08-23 (T2.3/T5.7/T5.8), UE5.8 EN — PIE-rendered HUD confirmed
+# Requires: none for authoring; runtime host BP for display
+
+--- Steps ---
+
+1. WBP: UMGToolSet.CreateWidgetBlueprint {folderPath, assetName, parentClass:/Script/UMG.UserWidget}
+
+2. ROOT FIRST: AddWidget {widgetBlueprint, widgetClass:/Script/UMG.CanvasPanel, widgetDisplayName:"RootCanvas"}
+   ⚠ #23: first widget becomes ROOT — make it a panel!
+
+3. CHILDREN: AddWidget {..., widgetClass:/Script/UMG.TextBlock|Button, widgetDisplayName, parentWidget:RootCanvas}
+
+4. TEXT: ObjectTools.set_properties on "...WBP:WidgetTree.ScoreText" values='{"Text":"Score: 0"}'
+
+5. Compile + SAVE (SKILL#19)
+
+6. RUNTIME HOST (separate Actor BP) DSL:
+   (event EventBeginPlay
+     (bind pc (Game|GetPlayerController :PlayerIndex 0))
+     (bind w (UserInterface|CreateWidget :Class "/Game/.../WBP.WBP_C" :OwningPlayer pc))   ← pin is Class! #30
+     (UserInterface|Viewport|AddtoViewport :self w))
+
+7. VERIFY PIE: CaptureViewport misses HUD (SKILL#31) → SlateInspector.Screenshot full-window
+
+--- Pitfalls encoded: #23(canvas-first), #30(type_ids+Class pin), #31(capture), #19(save) ---

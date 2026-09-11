@@ -1,0 +1,22 @@
+# Template: Sequencer Keyframe Animation (create sequence → bind actor → track → section → keys → FBX)
+# Verified: 2026-08-29 UE5.8 EN (end-to-end, FBX disk-verified 25.3KB)
+# Requires: target actor in current level; C:/UE_Import exists (or any writable path)
+
+--- Steps (exact calls, all verified) ---
+
+1. Create sequence: SequencerTools.create_level_sequence(package_path="/Game/TestTN", asset_name="LS_Name")
+2. Open it: open_sequence(sequence={"refPath":"/Game/TestTN/LS_Name.LS_Name"})
+3. Get a LIVE actor ref first: SceneTools.find_actors(name="X") → use CURRENT refPath (stale UAIDs fail with "not valid Actor for TransientPythonProperty")
+4. Bind: add_actors(actors=[{"refPath": <live actor>}]) → returns bindingId + sequence
+5. Track: add_track_to_binding(sequence=ref, binding={bindingId, sequence}, track_type={"refPath":"/Script/MovieSceneTracks.MovieScene3DTransformTrack"})
+   — track_type is a CLASS REF, "Transform" string fails
+6. Section: get_sections(track) → [] → add_section(track, section_type={"refPath":"/Script/MovieSceneTracks.MovieScene3DTransformSection"})
+7. Channels: SequencerKeyframingTools.get_channel_names(section) → [Location.X/Y/Z, Rotation.X/Y/Z, Scale.X/Y/Z]
+8. Keys: add_key_float(section, channel_name="Location.X", frame=0, value=1500.0, interpolation="Auto")  — interpolation REQUIRED
+9. Verify: get_keys(section, channel_name) → [{"frame":0,"value":1500.0}, ...]
+10. Export FBX: SequencerImportExportTools.export_fbx(sequence=ref, world={"refPath":"/Game/<Level>.<Level>"} (World obj, NOT :PersistentLevel!), bindings=[binding], fbx_file_path="C:/UE_Import/x.fbx")
+11. Disk-verify the .fbx (G3); save_assets for the sequence.
+
+--- Pitfalls encoded: G7 param-name anarchy (error messages self-document — feed the missing
+  param name they report back in), track_type/section_type = class refs, world = World object,
+  interpolation required, live actor refs only ---

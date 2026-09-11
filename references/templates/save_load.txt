@@ -1,0 +1,33 @@
+﻿# Template: Save/Load System (slot-based persistence)
+# Verified: 2026-08-24 (v2.4), UE5.8 EN — SaveOK=true/Exists=true/TestSlot.sav 2014B on disk
+# Requires: BP_SaveData subclass FIRST (SKILL#36: base /Script/Engine.SaveGame instantiates but
+#   SaveGameToSlot returns FALSE — same pattern as DataAsset #36: must use BP subclass)
+
+--- Steps ---
+
+1. CREATE SaveGame subclass:
+   BlueprintTools.create {folder_path, asset_name:"BP_SaveData", asset_type:{refPath:"/Script/Engine.SaveGame"}}
+   compile + save
+   (add SaveGame-only vars here: Score, PlayerPos, etc. — they persist automatically)
+
+2. HOST BP DSL (full chain with bool probe prints):
+(event EventBeginPlay
+  (bind sg (SaveGame|CreateSaveGameObject "/Game/.../BP_SaveData.BP_SaveData_C"))
+  (bind ok (SaveGame|SaveGametoSlot :SaveGameObject sg :SlotName "TestSlot" :UserIndex 0))
+  (bind oks (Utilities|String|ToString(Boolean) :InBool ok))
+  (Development|PrintString :InString (+ "SaveOK=" oks))
+  (bind exists (SaveGame|DoesSaveGameExist :SlotName "TestSlot" :UserIndex 0))
+  (bind loaded (SaveGame|LoadGamefromSlot :SlotName "TestSlot" :UserIndex 0))
+  (Development|PrintString :InString "LoadDone"))
+
+3. VERIFY: PIE → GetLogEntries pattern="SaveOK=|LoadDone" → both logged
+   disk: <Project>/Saved/SaveGames/TestSlot.sav appears
+
+--- Node ids (category is SaveGame| NOT Game|) ---
+  SaveGame|CreateSaveGameObject (positional class arg, _C suffix)
+  SaveGame|SaveGametoSlot :SaveGameObject :SlotName :UserIndex
+  SaveGame|LoadGamefromSlot / DoesSaveGameExist / DeleteGameinSlot
+  async variants: SaveGame|AsyncSaveGametoSlot / AsyncLoadGamefromSlot
+  ToString(Boolean) pin = :InBool ; ToString(Integer) pin = :InInt ; IsValid pin = :InputObject
+
+--- Pitfalls encoded: SKILL#36(new: base class save fails), #13(_C), SKILL#26(category quirk) ---

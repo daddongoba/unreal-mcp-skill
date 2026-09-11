@@ -1,0 +1,35 @@
+# Template: WASD Movement (variable speed)
+# Verified: 2026-08-22, UE5.8, English locale, PIE-tested
+# Requires: MoveSpeed (float, instance editable) — set 500.0 on placed instance
+# MCP calls: add_variable, set_variable_instance_editable, write_graph_dsl, compile_blueprint
+
+--- DSL ---
+
+(event EventTick (DeltaSeconds)
+  (bind dt (* DeltaSeconds (Variables|Default|GetMoveSpeed)))
+  (bind pc (Game|GetPlayerController :PlayerIndex 0))
+  (bind wDown (Game|Player|IsInputKeyDown :self pc :Key "W"))
+  (bind sDown (Game|Player|IsInputKeyDown :self pc :Key "S"))
+  (bind aDown (Game|Player|IsInputKeyDown :self pc :Key "A"))
+  (bind dDown (Game|Player|IsInputKeyDown :self pc :Key "D"))
+  (bind moveX (* (- (select dDown 1.0 0.0) (select aDown 1.0 0.0)) dt))
+  (bind moveY (* (- (select wDown 1.0 0.0) (select sDown 1.0 0.0)) dt))
+  (bind moveVec (Math|Vector|MakeVector :X moveX :Y moveY :Z 0.0))
+  (Transformation|AddActorWorldOffset :DeltaLocation moveVec))
+
+--- Steps ---
+
+1. BlueprintTools.add_variable
+   {"blueprint":"<BP_REF>","name":"MoveSpeed","type_name":"float"}
+2. BlueprintTools.set_variable_instance_editable
+   {"blueprint":"<BP_REF>","variable_name":"MoveSpeed","instance_editable":true}
+3. BlueprintTools.write_graph_dsl
+   {"graph":"<GRAPH_REF>","code":"<DSL above>"}
+4. BlueprintTools.compile_blueprint
+   {"blueprint":"<BP_REF>"}
+5. SceneTools.add_to_scene_from_asset — place instance, set MoveSpeed=500 in Details
+
+--- Verify ---
+
+PIE: hold W → actor moves +Y; S → -Y; A → -X; D → +X. Speed scales with MoveSpeed.
+Notes: binds per direction avoid double-execution (rule R10). bool→float via select (R4).

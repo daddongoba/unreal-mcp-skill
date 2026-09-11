@@ -1,0 +1,324 @@
+{
+  "count": 23,
+  "note": "Verified-extras: nodes proven in PIE-verified templates/R-rules but MISSING from node_dictionary_merged.json (main dict covers only library static functions, not Actor/Component members or special K2Nodes). Entries marked pattern: are type_id construction rules, not fixed ids. Searched by scripts/search_node_dict.ps1 alongside the main dict. NAMESPACE CAVEAT (live-verified 2026-09-06): the MAIN dictionary stores palette display names (e.g. 'float * float', category 'Flow Control', 'To String (Integer)') which are NOT usable tool type_ids - tool ids use compact forms (Utilities|Operators|Multiply, Utilities|FlowControl|Branch, Utilities|String|ToString(Integer)). Entries below carry tool-verified ids only.",
+  "nodes": {
+    "Game|SpawnActorfromClass": {
+      "dsl_type_id": "Game|SpawnActorfromClass",
+      "display_name": "SpawnActorfromClass",
+      "category": "Game",
+      "ue_class": "K2Node_SpawnActor",
+      "inputs": [
+        {"name": "Class", "type": "class", "default": null},
+        {"name": "SpawnTransform", "type": "struct:Transform", "default": null},
+        {"name": "CollisionHandlingOverride", "type": "enum", "default": "Default"}
+      ],
+      "outputs": [
+        {"name": "ReturnValue", "type": "object:Actor"}
+      ],
+      "notes": "Class pin wants generated class path WITH _C suffix (R7). 'bind' takes the return pin. CollisionHandlingOverride values quoted: \"AlwaysSpawn\" (R5).",
+      "source": "[VERIFIED 2026-08-24 UE5.8-EN] templates/spawn_despawn.txt + dsl_syntax.md 3.5"
+    },
+    "Actor|GetComponentbyClass": {
+      "dsl_type_id": "Actor|GetComponentbyClass",
+      "display_name": "GetComponentbyClass",
+      "category": "Actor",
+      "ue_class": "K2Node_CallFunction",
+      "function_owner": "/Script/Engine.Actor",
+      "inputs": [
+        {"name": "self", "type": "object:Actor", "default": null},
+        {"name": "ComponentClass", "type": "class", "default": null}
+      ],
+      "outputs": [
+        {"name": "ReturnValue", "type": "object:Component"}
+      ],
+      "notes": "ComponentClass takes quoted /Script path, e.g. \"/Script/Engine.StaticMeshComponent\". Core of the runtime physics activation chain (R23).",
+      "source": "[VERIFIED 2026-08-24 UE5.8-EN] templates/physics_runtime.txt, PIE-confirmed z1500->50"
+    },
+    "Physics|SetSimulatePhysics": {
+      "dsl_type_id": "Physics|SetSimulatePhysics",
+      "display_name": "SetSimulatePhysics",
+      "category": "Physics",
+      "ue_class": "K2Node_CallFunction",
+      "inputs": [
+        {"name": "self", "type": "object:Component", "default": null},
+        {"name": "bSimulate", "type": "bool", "default": null}
+      ],
+      "outputs": [],
+      "notes": "self pin takes the COMPONENT ref (feed from GetComponentbyClass return). Runtime activation at BeginPlay is 100% reliable in PIE; editor-time property setting is NOT (R23).",
+      "source": "[VERIFIED 2026-08-24 UE5.8-EN] templates/physics_runtime.txt"
+    },
+    "Actor|DestroyActor": {
+      "dsl_type_id": "Actor|DestroyActor",
+      "display_name": "DestroyActor",
+      "category": "Actor",
+      "ue_class": "K2Node_CallFunction",
+      "function_owner": "/Script/Engine.Actor",
+      "inputs": [
+        {"name": "self", "type": "object:Actor", "default": null}
+      ],
+      "outputs": [],
+      "source": "[VERIFIED 2026-08-22 UE5.8-EN] templates/projectile_basic.txt, PIE-confirmed"
+    },
+    "Game|Player|IsInputKeyDown": {
+      "dsl_type_id": "Game|Player|IsInputKeyDown",
+      "display_name": "IsInputKeyDown",
+      "category": "Game|Player",
+      "ue_class": "K2Node_CallFunction",
+      "function_owner": "/Script/Engine.PlayerController",
+      "inputs": [
+        {"name": "self", "type": "object:PlayerController", "default": null},
+        {"name": "Key", "type": "struct:Key", "default": null}
+      ],
+      "outputs": [
+        {"name": "ReturnValue", "type": "bool"}
+      ],
+      "notes": "self pin = PlayerController, NOT the actor (R6): bind GetPlayerController first. Key values quoted: \"W\" \"S\" \"A\" \"D\" \"SpaceBar\". Bool cannot enter operators - convert via (select b 1.0 0.0) (R4).",
+      "source": "[VERIFIED 2026-08-22 UE5.8-EN] templates/movement_wasd.txt, PIE-confirmed"
+    },
+    "Input|EnableInput": {
+      "dsl_type_id": "Input|EnableInput",
+      "display_name": "EnableInput",
+      "category": "Input",
+      "ue_class": "K2Node_CallFunction",
+      "function_owner": "/Script/Engine.Actor",
+      "inputs": [
+        {"name": "self", "type": "object:Actor", "default": null},
+        {"name": "PlayerController", "type": "object:PlayerController", "default": null}
+      ],
+      "outputs": [],
+      "notes": "Non-Pawn actors ignore keyboard until this runs in BeginPlay with GetPlayerController (P9).",
+      "source": "[VERIFIED] dsl_syntax.md 3.4"
+    },
+    "Transformation|AddActorWorldOffset": {
+      "dsl_type_id": "Transformation|AddActorWorldOffset",
+      "display_name": "AddActorWorldOffset",
+      "category": "Transformation",
+      "ue_class": "K2Node_CallFunction",
+      "function_owner": "/Script/Engine.Actor",
+      "inputs": [
+        {"name": "self", "type": "object:Actor", "default": null},
+        {"name": "DeltaLocation", "type": "struct:Vector", "default": null},
+        {"name": "bSweep", "type": "bool", "default": false},
+        {"name": "bTeleport", "type": "bool", "default": false}
+      ],
+      "outputs": [],
+      "notes": "bSweep=true only collides via the ROOT component (R9/G4) - promote mesh to root first.",
+      "source": "[VERIFIED 2026-08-22 UE5.8-EN] templates/movement_wasd.txt + projectile_basic.txt, PIE-confirmed"
+    },
+    "Transformation|GetActorLocation": {
+      "dsl_type_id": "Transformation|GetActorLocation",
+      "display_name": "GetActorLocation",
+      "category": "Transformation",
+      "ue_class": "K2Node_CallFunction",
+      "function_owner": "/Script/Engine.Actor",
+      "inputs": [
+        {"name": "self", "type": "object:Actor", "default": null}
+      ],
+      "outputs": [
+        {"name": "ReturnValue", "type": "struct:Vector"}
+      ],
+      "notes": "Read ANOTHER actor's location by feeding it to self: (Transformation|GetActorLocation :self OtherActor) - pattern used in scene_watcher.txt.",
+      "source": "[VERIFIED 2026-08-24 UE5.8-EN] templates/spawn_despawn.txt + scene_watcher.txt"
+    },
+    "Transformation|GetActorRotation": {
+      "dsl_type_id": "Transformation|GetActorRotation",
+      "display_name": "GetActorRotation",
+      "category": "Transformation",
+      "ue_class": "K2Node_CallFunction",
+      "function_owner": "/Script/Engine.Actor",
+      "inputs": [
+        {"name": "self", "type": "object:Actor", "default": null}
+      ],
+      "outputs": [
+        {"name": "ReturnValue", "type": "struct:Rotator"}
+      ],
+      "source": "[VERIFIED] dsl_syntax.md 3.5 (compile-verified)"
+    },
+    "Transformation|GetActorForwardVector": {
+      "dsl_type_id": "Transformation|GetActorForwardVector",
+      "display_name": "GetActorForwardVector",
+      "category": "Transformation",
+      "ue_class": "K2Node_CallFunction",
+      "function_owner": "/Script/Engine.Actor",
+      "inputs": [
+        {"name": "self", "type": "object:Actor", "default": null}
+      ],
+      "outputs": [
+        {"name": "ReturnValue", "type": "struct:Vector"}
+      ],
+      "source": "[VERIFIED 2026-08-22 UE5.8-EN] templates/projectile_basic.txt, PIE-confirmed"
+    },
+    "Transformation|SetActorRotation": {
+      "dsl_type_id": "Transformation|SetActorRotation",
+      "display_name": "SetActorRotation",
+      "category": "Transformation",
+      "ue_class": "K2Node_CallFunction",
+      "function_owner": "/Script/Engine.Actor",
+      "inputs": [
+        {"name": "self", "type": "object:Actor", "default": null},
+        {"name": "NewRotation", "type": "struct:Rotator", "default": null}
+      ],
+      "outputs": [],
+      "notes": "Feeds from RInterpTo return (a Rotator, R17) - wrap raw floats with MakeRotator first.",
+      "source": "[VERIFIED 2026-08-28 UE5.8-EN] templates/touch_trigger_rotation.txt + interactive_door.txt, PIE user-confirmed"
+    },
+    "Transformation|GetDistanceTo": {
+      "dsl_type_id": "Transformation|GetDistanceTo",
+      "display_name": "GetDistanceTo",
+      "category": "Transformation",
+      "ue_class": "K2Node_CallFunction",
+      "function_owner": "/Script/Engine.Actor",
+      "inputs": [
+        {"name": "self", "type": "object:Actor", "default": null},
+        {"name": "OtherActor", "type": "object:Actor", "default": null}
+      ],
+      "outputs": [
+        {"name": "ReturnValue", "type": "float"}
+      ],
+      "notes": "Proximity trigger pattern (G5/#52): flying DefaultPawn cannot push physics bodies - trigger on distance < ~250 instead.",
+      "source": "[VERIFIED 2026-08-28 UE5.8-EN] templates/scene_watcher.txt, PIE user-confirmed"
+    },
+    "Actor|ActorHasTag": {
+      "dsl_type_id": "Actor|ActorHasTag",
+      "display_name": "ActorHasTag",
+      "category": "Actor",
+      "ue_class": "K2Node_CallFunction",
+      "function_owner": "/Script/Engine.Actor",
+      "inputs": [
+        {"name": "self", "type": "object:Actor", "default": null},
+        {"name": "Tag", "type": "string", "default": null}
+      ],
+      "outputs": [
+        {"name": "ReturnValue", "type": "bool"}
+      ],
+      "notes": "Gate overlap arming by tag or the PLAYER becomes the target (#51).",
+      "source": "[VERIFIED 2026-08-28 UE5.8-EN] templates/scene_watcher.txt, PIE user-confirmed"
+    },
+    "UserInterface|CreateWidget": {
+      "dsl_type_id": "UserInterface|CreateWidget",
+      "display_name": "CreateWidget",
+      "category": "UserInterface",
+      "ue_class": "K2Node_CallFunction",
+      "inputs": [
+        {"name": "Class", "type": "class", "default": null},
+        {"name": "OwningPlayer", "type": "object:PlayerController", "default": null}
+      ],
+      "outputs": [
+        {"name": "ReturnValue", "type": "object:UserWidget"}
+      ],
+      "notes": "Class pin (NOT WidgetClass) takes the WBP _C path (R16/#30); OwningPlayer from GetPlayerController.",
+      "source": "[VERIFIED 2026-08-23 UE5.8-EN] templates/umg_basic.txt, PIE-rendered HUD"
+    },
+    "UserInterface|Viewport|AddtoViewport": {
+      "dsl_type_id": "UserInterface|Viewport|AddtoViewport",
+      "display_name": "AddtoViewport",
+      "category": "UserInterface|Viewport",
+      "ue_class": "K2Node_CallFunction",
+      "inputs": [
+        {"name": "self", "type": "object:UserWidget", "default": null}
+      ],
+      "outputs": [],
+      "notes": "Exact casing 'AddtoViewport' (lowercase 'to') - NOT 'AddToViewport'. Category path is UserInterface|Viewport (R16).",
+      "source": "[VERIFIED 2026-08-23 UE5.8-EN] templates/umg_basic.txt, PIE-rendered HUD"
+    },
+    "Utilities|Casting|CastTo<BPNameWithUnderscores>": {
+      "dsl_type_id": "Utilities|Casting|CastTo<BPNameWithUnderscores>",
+      "display_name": "CastTo<BPName>",
+      "category": "Utilities|Casting",
+      "ue_class": "K2Node_DynamicCast",
+      "pattern": true,
+      "inputs": [
+        {"name": "Object", "type": "object:Actor", "default": null}
+      ],
+      "outputs": [
+        {"name": "then", "type": "exec"},
+        {"name": "CastFailed", "type": "exec"},
+        {"name": "As <BPName>", "type": "object"}
+      ],
+      "notes": "UNDERSCORES KEPT in the node name: CastToBP_Inventory (OPPOSITE of the cross-BP call rule R12 which strips them - stripped CastToBPInventory FAILS 'does not exist', verified English locale 2026-09-06; engine-class casts are CastToObject etc). LOCALE WARNING: the cast category may localize in Chinese editors (palette shows 工具|Casting|...) while function nodes (Actor|, Game|...) keep untranslated metadata categories - in zh editors prefer the GAOC typed-output pattern to avoid Cast entirely. Object pin MUST have a typed non-empty source or compile fails 'undetermined' (#42). Exec outs: then / CastFailed.",
+      "source": "[VERIFIED 2026-09-06 UE5.8-EN] create_node CastToBP_Inventory success + pins readback; stripped-form failure confirmed same session"
+    },
+    "Actor|GetAllActorsOfClass": {
+      "dsl_type_id": "Actor|GetAllActorsOfClass",
+      "display_name": "GetAllActorsOfClass",
+      "category": "Actor",
+      "ue_class": "K2Node_CallFunction",
+      "function_owner": "/Script/Engine.GameplayStatics",
+      "inputs": [
+        {"name": "ActorClass", "type": "class", "default": null}
+      ],
+      "outputs": [
+        {"name": "OutActors", "type": "array"}
+      ],
+      "notes": "TYPED-OUTPUT GENERIC: OutActors type FOLLOWS the ActorClass pin - GAOC(:ActorClass=\"/Game/.../BP_X.BP_X_C\") outputs a BP_X_C array, so foreach elements can feed cross-BP calls DIRECTLY with NO Cast node (verified PIE 2026-09-06: foreach elem -> Class|BPX|Func :self elem, printed 42 per instance). This AVOIDS the whole failure-prone Cast family (locale-sensitive category + inverted underscore rule). Sibling: Actor|GetAllActorsOfClasswithTag. Loop-body calls are safe (unlike pure nodes - G6 hoisting applies to pure nodes only).",
+      "source": "[VERIFIED 2026-09-06 UE5.8-EN] PIE end-to-end, CCC test bed"
+    },
+    "Class|<BPNameNoUnderscores>|<Member>": {
+      "dsl_type_id": "Class|<BPNameNoUnderscores>|<Member>",
+      "display_name": "cross-BP member access",
+      "category": "Class",
+      "ue_class": "K2Node_CallFunction",
+      "pattern": true,
+      "inputs": [
+        {"name": "self", "type": "object", "default": null}
+      ],
+      "outputs": [
+        {"name": "ReturnValue", "type": "varies"}
+      ],
+      "notes": "Strip underscores from BP name: BP_GridGameMode -> Class|BPGridGameMode|GetTheDoor (R12/#29/#40). Same-BP calls use (BP_C|Func).",
+      "source": "[VERIFIED 2026-08-23 UE5.8-EN] T6, dsl_syntax.md R12"
+    },
+    "AddEvent|<Path>": {
+      "dsl_type_id": "AddEvent|<Path>",
+      "display_name": "event entries",
+      "category": "AddEvent",
+      "ue_class": "K2Node_Event",
+      "pattern": true,
+      "inputs": [],
+      "outputs": [],
+      "notes": "EventTick/EventBeginPlay work BARE in (event ...) for ACTOR BPs. Collision events need full path: AddEvent|Collision|EventActorBeginOverlap, AddEvent|Collision|EventHit (R1). WIDGET (UserWidget) events need the UserInterface segment: AddEvent|UserInterface|EventTick / EventConstruct / EventPreConstruct / EventDestruct / EventOnInitialized - bare EventTick FAILS in WBP graphs. Multi-param events list ALL params in ONE parenthesized form: (event AddEvent|UserInterface|EventTick (MyGeometry InDeltaTime) ...). Keyboard/mouse CANNOT be created via DSL - create_node 'Input|KeyboardEvents|<Key>' + Python wiring (R2/#12). Overlap events deliver (OtherActor) param.",
+      "source": "[VERIFIED 2026-08-22 UE5.8-EN] dsl_syntax.md R1/R2 + all PIE templates; WBP paths [VERIFIED 2026-09-06 UE5.8-EN] live probes in CCC"
+    },
+    "Utilities|Operators|<Op>": {
+      "dsl_type_id": "Utilities|Operators|<Op>",
+      "display_name": "arithmetic operators",
+      "category": "Utilities|Operators",
+      "ue_class": "K2Node_CallFunction",
+      "pattern": true,
+      "inputs": [
+        {"name": "A", "type": "wildcard", "default": null},
+        {"name": "B", "type": "wildcard", "default": null}
+      ],
+      "outputs": [
+        {"name": "ReturnValue", "type": "wildcard"}
+      ],
+      "notes": "Tool ids [live-probed 2026-09-06]: Add / Subtract / Multiply / Divide / Equal(==) / NotEqual(!=) / Less(<) / LessEqual(<=) / Greater(>) / GreaterEqual(>=). DSL sugar (+ a b) (* a b) preferred, binary only (R3), bool NOT accepted (R4). The MAIN dictionary lists these as display names ('float * float', category Math|Float) - display forms are NOT usable type_ids.",
+      "source": "[VERIFIED 2026-09-06 UE5.8-EN] find_node_types live probe, CCC"
+    },
+    "Utilities|FlowControl|<Node>": {
+      "dsl_type_id": "Utilities|FlowControl|<Node>",
+      "display_name": "flow control nodes",
+      "category": "Utilities|FlowControl",
+      "ue_class": "K2Node_IfThenElse",
+      "pattern": true,
+      "inputs": [],
+      "outputs": [],
+      "notes": "Tool ids [live-probed 2026-09-06]: Branch / Sequence / ForLoop / ForLoopwithBreak / WhileLoop / Delay / RetriggerableDelay / DelayUntilNextTick / DelayUntilNextFrame / DoOnce / DoOnceMultiInput / DoN / FlipFlop / Gate / MultiGate / Switch|SwitchonInt / SwitchonName / SwitchonString (lowercase 'on' in Switchon*). DSL sugar (if/for/while/switch) preferred. MAIN dictionary display category 'Flow Control' (WITH space) is palette-only - NOT a usable id.",
+      "source": "[VERIFIED 2026-09-06 UE5.8-EN] find_node_types live probe, CCC"
+    },
+    "Utilities|String|ToString(Integer)": {
+      "dsl_type_id": "Utilities|String|ToString(Integer)",
+      "display_name": "ToString(Integer)",
+      "category": "Utilities|String",
+      "ue_class": "K2Node_CallFunction",
+      "inputs": [
+        {"name": "InInt", "type": "int", "default": null}
+      ],
+      "outputs": [
+        {"name": "ReturnValue", "type": "string"}
+      ],
+      "notes": "Compact spelling (NO space) is the real tool id - create_node verified 2026-09-06. Dictionary display form 'To String (Integer)' FAILS. Short path 'Utilities|ToString(Integer)' (missing String segment) FAILS. Siblings: ToString(Boolean):InBool, ToString(Float):InFloat, ToString(Object), ToString(Name), ToString(Vector), ToString(Rotator), ToString(Transform).",
+      "source": "[VERIFIED 2026-09-06 UE5.8-EN] create_node + DSL write, CCC; earlier [VERIFIED 2026-08-24] save_load.txt PIE"
+    }
+  }
+}

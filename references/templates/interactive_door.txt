@@ -1,0 +1,45 @@
+﻿# Template: Interactive Door (overlap trigger + RInterpTo animation + cross-BP call)
+# Verified: 2026-08-23 compile-level; 2026-08-24 v2.5 runtime UNBLOCKED (place above terrain +
+#   runtime physics activation, see physics_runtime.txt)
+# v2.6.1 2026-08-28: trigger MUST be a BoxComponent (Box Collision), NOT a mesh cube —
+#   mesh-cube profiles silently fail (SKILL#41) and blocking pairs never fire BeginOverlap (SKILL#45)
+# Requires: trace_world FIRST to find terrain height; place actors ABOVE terrain
+
+--- Components (BP_Door) ---
+Root: DoorPanel(cube) or SceneRoot; child: TouchBox = ActorTools.add_component(
+  owner=CDO, component_type="/Script/Engine.BoxComponent", name="TouchBox")
+  boxExtent (~2x panel half-extents, z spanning contact zone), bGenerateOverlapEvents=true,
+  bodyInstance.collisionProfileName="Trigger"  (verify readback: QueryOnly)
+vars: TargetYaw(float), CurrentYaw(float), bOpening(bool→nodes are GetOpening/SetOpening #27)
+
+--- DSL: overlap opens ---
+(event AddEvent|Collision|EventActorBeginOverlap
+  (Variables|Default|SetTargetYaw 90.0)
+  (Variables|Default|SetOpening true)
+  (Development|PrintString :InString "DOOR TRIGGERED"))
+
+--- DSL: Tick lerp (#38: RInterpTo wants ROTATORS) ---
+(event EventTick (DeltaSeconds)
+  (bind opening (Variables|Default|GetOpening))
+  (if opening
+    (bind cur (Variables|Default|GetCurrentYaw))
+    (bind tgt (Variables|Default|GetTargetYaw))
+    (bind curRot (Math|Rotator|MakeRotator :Pitch 0.0 :Yaw cur :Roll 0.0))
+    (bind tgtRot (Math|Rotator|MakeRotator :Pitch 0.0 :Yaw tgt :Roll 0.0))
+    (bind newRot (Math|Interpolation|RInterpTo :Current curRot :Target tgtRot :DeltaTime DeltaSeconds :InterpSpeed 5.0))
+    (Transformation|SetActorRotation :NewRotation newRot)
+    (Variables|Default|SetCurrentYaw (.yaw newRot))))
+
+--- Function (callable cross-BP): (fn OpenDoor (NewYaw) ...) — see T6 ---
+
+--- Cross-BP caller (BP_Player, E key; input nodes via create_node+Python #12/#30) ---
+Chain: E(Pressed) → Game|GetGameMode → Cast→(AsBP Grid Game Mode #28) → Class|BPGridGameMode|GetTheDoor(P29/P40) → Cast→(AsBP Door) → Class|BPDoor|OpenDoor(:self, NewYaw=90)
+
+--- Driver cube: runtime physics (v2.5 reliable; see physics_runtime.txt) or Tick+sweep fallback ---
+Physics path: BeginPlay → GetComponentbyClass → SetSimulatePhysics(true)  [physics_runtime.txt]
+Tick fallback (deterministic non-physics):
+(event EventTick (DeltaSeconds)
+  (bind drop (Math|Vector|MakeVector :X 0.0 :Y 0.0 :Z (* -500.0 DeltaSeconds)))
+  (Transformation|AddActorWorldOffset :DeltaLocation drop :bSweep true :bTeleport false))
+
+--- Pitfalls encoded: SKILL.md #17(console)/#27(b-prefix)/#28(Cast pins)/#29(Cross-BP id)/#30(DSL top-level)/#24(terrain)/#25(instance refresh) ---

@@ -1,0 +1,60 @@
+# Template: Existing-Scene Watcher (zero-touch attach: tag targets + sense box + settle detect + proximity touch)
+# Verified: 2026-08-28 UE5.8 EN (user PIE-confirmed: cube sank on proximity touch; watcher touched nothing existing)
+# Context: add behavior to an actor in a MADE scene (whitebox or production) WITHOUT editing that actor,
+#          its blueprint, or any pre-existing asset. See few_shots case #8 for the workflow frame.
+
+--- Concept ---
+BP_Watcher (invisible logic actor, folder TestT_N) placed by the user (or agent) near the target:
+  sense box latches the target by TAG (never by registration order), settle detector waits out
+  physics falling, then PROXIMITY (not displacement) = touch. All effects act on TargetActor only.
+
+--- Components (BP_Watcher) ---
+ActorTools.add_component("/Script/Engine.BoxComponent", "SenseBox"):
+  boxExtent sized to cover EXACTLY ONE target (multi-target = ambiguous arming);
+  bGenerateOverlapEvents=true; bodyInstance.collisionProfileName="Trigger" (verify readback QueryOnly)
+
+--- Target tagging (do this FIRST — green on agent-created actors; ask on user's) ---
+ActorTools.add_tag(actor=<target>, tag="WatchTarget"); verify ActorTools.has_tag
+
+--- vars ---
+bArmed, bSettled, bFiring (bool); TargetActor (Actor object var); StartLoc, LastLoc (Vector); StillFrames, CurZ (float)
+
+--- DSL: arm on tagged overlap only (#51: unfiltered = the PLAYER becomes the target) ---
+(event AddEvent|Collision|EventActorBeginOverlap (OtherActor)
+  (if (not (Variables|Default|GetArmed))
+    (bind ok (Actor|ActorHasTag :self OtherActor :Tag "WatchTarget"))
+    (if ok
+      (Variables|Default|SetTargetActor OtherActor)
+      (bind loc0 (Transformation|GetActorLocation :self OtherActor))
+      (Variables|Default|SetStartLoc loc0)
+      (Variables|Default|SetCurZ (.z loc0))
+      (Variables|Default|SetArmed true)
+      (Development|PrintString :InString "armed: tagged target"))))
+
+--- DSL: settle detector + PROXIMITY touch (#52: flying pawn can't push; displacement never fires) ---
+(event EventTick (DeltaSeconds)
+  (bind tgt (Variables|Default|GetTargetActor))
+  (if (Variables|Default|GetArmed)
+    ... delta-vs-LastLoc dm2 ...
+    (if (not (Variables|Default|GetSettled))   ; wait until STILL for ~0.5s (30 ticks)
+      (if (< dm2 1.0) (SetStillFrames +1) (if (> StillFrames 30) SetStartLoc/SetSettled/Print"ARMED-at rest"))
+      (SetLastLoc cur))
+    (if (and Settled (not Firing))
+      (bind pawn (Game|GetPlayerPawn :PlayerIndex 0))
+      (bind pd (Transformation|GetDistanceTo :self pawn :OtherActor tgt))
+      (if (< pd 250.0)  ...fire: GetComponentbyClass/SetSimulatePhysics(false)/SetFiring/Print... ))
+    (if Firing ... effect on TargetActor only, e.g. FInterpTo sink 400 ...)))
+
+--- Steps ---
+1. add_tag on intended target(s) → 2. build BP_Watcher (component+vars+DSL) → compile → save
+3. user places/moves the watcher (respect their placement; re-check coverage math after moves:
+   zone ± boxExtent must wrap exactly ONE target) → 4. user PIE: armed→at-rest→approach→effect.
+5. Re-verify coverage AFTER any user move (transforms change silently; #25/#53 landmines).
+
+--- Verify ---
+PIE prints sequence: "armed: tagged target" → "ARMED - at rest" → "TOUCHED ..." then visual effect.
+Print text doubles as build fingerprint — GetLogEntries forensics shows which graph version ran.
+
+--- Pitfalls encoded: #48 overlap-delivers-target (no GAAC loops), #51 tag filter, #52 proximity
+  not displacement + log forensics, #53 instance struct first-scalar-only (use single-leaf sets),
+  #49 delete stale entry nodes on rewrite, #50 bool display-name input vs b-prefixed readback ---

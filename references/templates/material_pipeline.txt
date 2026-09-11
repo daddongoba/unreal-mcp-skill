@@ -1,0 +1,30 @@
+﻿# Template: Material Pipeline (create + texture + parameterize + instance)
+# Verified: 2026-08-23 (T2.1/T2.2/D1), UE5.8 EN — thumbnail-confirmed red brick + green MI
+# Requires: nothing (standalone); AI texture via ai_asset_import.txt optional
+
+--- Steps ---
+
+1. CREATE base material
+   MaterialTools.create_material {folder_path, asset_name:"M_X"}
+
+2. ADD nodes (add_expression: material_or_function + expression_class refPath + x/y)
+   Constant3Vector : /Script/Engine.MaterialExpressionConstant3Vector
+   VectorParameter : /Script/Engine.MaterialExpressionVectorParameter
+   TextureSample   : /Script/Engine.MaterialExpressionTextureSample
+
+3. SET properties (ObjectTools.set_properties on expression, PascalCase!)
+   Constant3Vector.constant = {"r":1,"g":0.1,"b":0.1,"a":1}
+   VectorParameter.ParameterName = "Tint"     ← b/Pascal! not parameter_name
+   TextureSample.Texture = "/Game/.../texture.texture"
+
+4. CONNECT (connect_to_output: expression + output_name + material_property)
+   output_name="" (RGB default) or "RGB"; material_property="MP_BaseColor"|"MP_EmissiveColor"|...
+
+5. RECOMPILE: MaterialTools.recompile {material_or_function}
+
+6. MI: MaterialInstanceTools.create {folderPath, assetName, parent}
+   set_vector_parameter {instance, name, value:{r,g,b,a}}
+
+7. SAVE: AssetTools.save_assets — and thumbnail-verify CaptureAssetImage
+
+--- Pitfalls encoded: #26(param styles), #19(save), MP_Own pins ---

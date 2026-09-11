@@ -1,0 +1,28 @@
+﻿# Template: Runtime Physics Activation (reliable PIE gravity)
+# Verified: 2026-08-24 (v2.5 debt1), UE5.8 EN — cube fell z=1500→50, settled, 3-sample stable
+# Supersedes: unreliable bodyInstance property approach (SKILL#35) AND Tick+sweep DSL fallback for
+#   cases where real physics (gravity/collision response) is needed
+# Requires: BP with StaticMeshComponent (mesh assigned); place ABOVE terrain (R18)
+
+--- DSL (BeginPlay runtime activation) ---
+
+(event EventBeginPlay
+  (bind comp (Actor|GetComponentbyClass :self self :ComponentClass "/Script/Engine.StaticMeshComponent"))
+  (Physics|SetSimulatePhysics :self comp :bSimulate true)
+  (Development|PrintString :InString "PhysicsOn@BeginPlay"))
+
+--- Steps ---
+
+1. BP: add cube component + assign staticMesh via ObjectTools (PascalCase "staticMesh")
+2. Optionally set collision profile: bodyInstance.collisionProfileName = "PhysicsActor"
+3. write_graph_dsl (above) → compile → save
+4. trace_world at target XY → place instance ABOVE terrain
+5. PIE Play (bSimulate=false) → GetActorTransform samples show falling z
+
+--- Key facts ---
+- Node ids: Actor|GetComponentbyClass (pins: self + ComponentClass) / Physics|SetSimulatePhysics (pins: self + bSimulate)
+- PhysicsActor profile recommended for interactive physics
+- Works for ANY PrimitiveComponent subclass (swap ComponentClass for skeletal etc.)
+- Deterministic: unlike editor-property physics, this fires 100% in PIE
+
+--- Pitfalls encoded: SKILL#35→#38 (refined), SKILL#24 terrain, R18 ---

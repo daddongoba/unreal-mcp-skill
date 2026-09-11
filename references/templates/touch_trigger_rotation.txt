@@ -1,0 +1,56 @@
+# Template: Touch-Trigger Rotation (object touches target → target slowly rotates N°)
+# Verified: 2026-08-28 UE5.8 EN (user PIE-confirmed: flip-wall 180° + 5-box orbit puzzle both passed)
+# Requires: BoxComponent trigger (SKILL#41/#45) — NOT a mesh cube; driver with ROOT physics mesh (SKILL#40, physics_runtime.txt)
+
+--- Concept ---
+A physical driver (falling cube) touches a trigger volume → target actor slowly rotates to a yaw offset.
+Two battle-tested instantiations:
+  A. Flip wall: single target box flips 180° once on contact.
+  B. Orbit puzzle: 4 satellite boxes orbit a center box; EACH contact rotates the whole actor -90°.
+     Key trick: all center-of-rotation components (center box, switch cylinder, trigger box) are
+     self-symmetric at the pivot → rotating the ACTOR leaves them visually static; only satellites orbit.
+
+--- Components (target BP) ---
+add_cube × N (all: staticMesh=/Engine/BasicShapes/Cube, BlockAll; satellites at ±D cross positions)
+add_cylinder (switch on center box top, BlockAll)  [puzzle variant]
+ActorTools.add_component(component_type="/Script/Engine.BoxComponent", name="TouchBox")
+  boxExtent covering the contact zone (e.g. 65×65×70 on switch top)
+  bGenerateOverlapEvents=true, bodyInstance.collisionProfileName="Trigger"
+  → verify readback: QueryOnly (SKILL#41: profiles silently fail on meshes; #45: blocking ≠ overlap)
+vars: TargetYaw(float), CurrentYaw(float), bRotating(bool)  [b-prefix stripped in DSL nodes — R13]
+
+--- DSL ---
+(event AddEvent|Collision|EventActorBeginOverlap
+  (bind newTgt (- (Variables|Default|GetTargetYaw) 90.0))   ; flip-wall: 180.0 set directly instead
+  (Variables|Default|SetTargetYaw newTgt)
+  (Variables|Default|SetRotating true)
+  (Development|PrintString :InString "TOUCHED - rotating"))
+
+(event EventTick (DeltaSeconds)
+  (bind rotating (Variables|Default|GetRotating))
+  (if rotating
+    (bind cur (Variables|Default|GetCurrentYaw))
+    (bind tgt (Variables|Default|GetTargetYaw))
+    (bind curRot (Math|Rotator|MakeRotator :Pitch 0.0 :Yaw cur :Roll 0.0))
+    (bind tgtRot (Math|Rotator|MakeRotator :Pitch 0.0 :Yaw tgt :Roll 0.0))
+    (bind newRot (Math|Interpolation|RInterpTo :Current curRot :Target tgtRot :DeltaTime DeltaSeconds :InterpSpeed 2.0))
+    (Transformation|SetActorRotation :NewRotation newRot)
+    (Variables|Default|SetCurrentYaw (.yaw newRot))))
+
+CCW vs CW: TargetYaw−90 per hit = counter-clockwise viewed from above; +90 = clockwise.
+Repeat triggers: driver resting on trigger re-fires only if lifted out & dropped again (BeginOverlap edge);
+for continuous stepping add an end-check that clears bRotating when |tgt−cur|<1°.
+
+--- Steps ---
+1. Create target BP → add components + vars → write DSL → compile → save_assets.
+2. Driver: reuse a physics cube BP (ROOT mesh, PhysicsActor profile, runtime activation — physics_runtime.txt).
+3. trace_world at spot → place target (pivot z = ground + half height) and driver (z = trigger top + 300).
+4. Re-place instances after any BP change (SKILL#25 stale instances).
+5. PIE Play → driver falls, touches trigger, target rotates over ~2 s (InterpSpeed 2).
+
+--- Verify ---
+PIE: driver lands on trigger → PrintString fires → target rotates smoothly to target yaw and stops.
+Puzzle: satellites advance one compass position per contact (N→W→S→E→N for −90 steps).
+
+--- Pitfalls encoded: SKILL#40 root physics, #41 BoxComponent trigger, #45 blocking≠overlap,
+  #25 re-place after edit, #24 trace terrain, R13 b-prefix, R17 RInterpTo rotators, #46 disk-verify saves ---

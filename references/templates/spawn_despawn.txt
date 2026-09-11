@@ -1,0 +1,37 @@
+﻿# Template: Spawn/Despawn Cycle (timer-driven actor lifecycle)
+# Verified: 2026-08-24 (v2.4), UE5.8 EN — PIE 6 cycles @2s confirmed via log
+# Requires: BP with SpawnTimer(float) var; place ABOVE terrain (R18/SKILL#24)
+# ⚠SKILL#13+: Class must be a REAL spawnable class: "/Script/Engine.StaticMeshActor" works;
+#   "/Engine/EngineBlueprintResources/StandardAssetCube.StandardAssetCube_C" does NOT (compile error "must have a Class specified")
+
+--- DSL ---
+
+(event EventBeginPlay
+  (Variables|Default|SetSpawnTimer 0.0)
+  (Development|PrintString :InString "Spawner Ready"))
+
+(event EventTick (DeltaSeconds)
+  (bind t (Variables|Default|GetSpawnTimer))
+  (bind nt (+ t DeltaSeconds))
+  (Variables|Default|SetSpawnTimer nt)
+  (if (> nt 2.0)
+    (Variables|Default|SetSpawnTimer 0.0)
+    (bind selfLoc (Transformation|GetActorLocation))
+    (bind spawnLoc (+ selfLoc (Math|Vector|MakeVector :X 0.0 :Y 0.0 :Z 150.0)))
+    (bind tf (Math|Transform|MakeTransform :Location spawnLoc))
+    (bind spawned (Game|SpawnActorfromClass :Class "/Script/Engine.StaticMeshActor" :SpawnTransform tf :CollisionHandlingOverride "AlwaysSpawn"))
+    (Development|PrintString :InString "Spawn cycle OK")
+    (Actor|DestroyActor :self spawned)))
+
+--- Steps ---
+1. create BP + add_variable SpawnTimer float
+2. write_graph_dsl (above) → compile_blueprint → save_assets
+3. trace_world at target XY → place BP ABOVE terrain
+4. PIE → GetLogEntries pattern="Spawn cycle OK" → ~1 event per 2s
+
+--- Variants ---
+- Keep-alive spawn (no destroy): drop the DestroyActor line, store spawned in object var
+- Spawn own BP: :Class "/Game/.../BP_X.BP_X_C" (SKILL#13 _C suffix)
+- Int→String msg: (Utilities|String|ToString(Integer) :InInt nc) — pin is InInt not Value
+
+--- Pitfalls encoded: #13(_C), SKILL#24(terrain), R18(trace first) ---

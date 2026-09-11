@@ -1,0 +1,19 @@
+# python artifacts
+__pycache__/
+*.pyc
+*.pyo
+
+# machine-local state (never share)
+ue_connect_state.json
+*.local.json
+
+# backups / editor droppings
+*.bak
+*.orig
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# user-specific scratch (regenerate via refresh_schemas)
+schemas_refresh_*.txt

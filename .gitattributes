@@ -1,0 +1,14 @@
+# Normalize line endings across platforms
+* text=auto
+
+# PowerShell scripts want CRLF on Windows
+*.ps1 text eol=crlf
+
+# Python and data files stay LF (shebangs, Mac/Linux twins)
+*.py text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+
+# Binary-ish dictionary blob - keep as-is
+*.gz binary

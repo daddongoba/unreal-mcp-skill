@@ -1,0 +1,21 @@
+﻿# Template: Sequencer Keyframe Animation
+# Verified: 2026-08-24 (T9.3), UE5.8 — Location.X 0→500 double-key written & saved
+# Requires: nothing
+
+--- Steps (ProgrammaticToolset Python preferred — schemas are nested) ---
+
+1. CREATE: SequencerTools.create_level_sequence {package_path, asset_name}
+2. OPEN:   open_sequence {sequence}   (sets editor context)
+3. CAMERA (optional): create_camera {spawnable:true} → bindingId
+4. TRACK:  add_track_to_sequence {sequence, track_type:{refPath:"/Script/MovieScene.MovieScene3DTransformTrack"}}
+5. SECTION: add_section {track, section_class:{refPath:"/Script/MovieScene.MovieScene3DTransformSection"}}
+   ⚠ #31: new track has ZERO sections — must add before keying
+6. KEYS: SequencerKeyframingTools.add_key_float {section, channel_name:"Location.X", frame:0, value:0.0, interpolation:"Auto"}
+   repeat at frame:120 value:500 for motion
+   siblings: add_key_bool / add_key_integer / add_key_string; set_default_value for base
+7. SAVE: AssetTools.save_assets
+
+Channels for Transform: Location.X/Y/Z, Rotation.X/Y/Z, Scale.X/Y/Z
+Keyframing toolset also has: curve_editor_select_keys, bake_channel_keys, get_keys_by_index (22 tools)
+
+--- Pitfalls encoded: #31(section required), #26(path params), #32(nested schemas→Python) ---
