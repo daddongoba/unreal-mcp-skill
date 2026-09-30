@@ -30,6 +30,22 @@ Every rule carries a confidence tag: `[VERIFIED <date> UE<ver>-<lang>]` (PIE-pro
 
 > Startup order matters: **UE first, then Codely** (Codely discovers MCP tools only at its own startup). The skill's `mcp_call.py` fallback keeps you working even if the order was wrong.
 
+## ⚠️ Known limitation: use the ENGLISH editor interface
+
+This skill is validated against UE 5.8 running with the **English (EN) editor language**.
+Do NOT switch the editor to Chinese (or another localized UI) while driving it via MCP:
+
+- Node `type_id`s are matched against palette/registry names. In a localized editor some
+  families are renamed (e.g. the Cast category `Utilities|Casting|` displays as
+  `工具|Casting|` in a Chinese editor), so node creation by id silently fails.
+- Every verified rule in this repo is tagged `[VERIFIED ... UE5.8-EN]` — proven on
+  English-locale editors only.
+
+**If your editor is in Chinese**: switch via `Edit → Editor Preferences → Region & Language
+→ Editor Language = English`, then restart the editor. Note the console command
+`culture = en` is NOT sufficient — it does not affect blueprint node display names
+(details in `references/ue_conventions.md` §10).
+
 ## Platform support
 
 | | Windows | macOS |

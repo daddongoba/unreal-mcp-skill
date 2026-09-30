@@ -3,6 +3,61 @@
 All notable changes to this skill. Format: one version block per batch; the authoritative
 state lives in SKILL.md → Current state.
 
+## v3.16.0 (2026-09-30)
+- **Host/environment lessons batch-committed** (one 2026-09-30 session, UE 5.8.3 + RTX 3080
+  10 GB / 32 GB host) - three new env-session §4 laws:
+  **G21** host-memory exhaustion masquerading as GPU OOM (`D3D12Util.cpp:815`; VRAM had
+  6.4 GB free while commit was full; fixes = fewer shader workers + bigger pagefile, the
+  latter only via the registry - WMI `Put()` fails), **G22** `ue_connect.py wait` 420 s
+  timeout != failure (SM6 first-activation load took 1136 s; poll again, do not relaunch),
+  **G23** Nanite "Missing Project Settings" = missing `+D3D12TargetedShaderFormats=PCD3D_SM6`
+  (first load 1136 s -> 14 s once DDC-warm).
+- Plus a **G21** pointer in Common Pitfalls and the timeout clause in One-Click Connect.
+
+## v3.15.0 (2026-09-30)
+- **Development-Mode Selection law added** (router-level gate, user mandate 2026-09-30):
+  for every feature request, judge C++ vs MCP/Blueprint by build+verify cost and state the
+  reason *before* building - never default to MCP/Blueprint; cross-referenced from
+  `references/capability_boundaries.md` §5.
+
+## v3.14.0 (2026-09-25)
+- **Full capability-boundary survey on UE 5.8.3.** New artifact
+  **`references/capability_boundaries.md`** (three-axis boundary map: toolset layer /
+  per-domain verdicts / substantiated absences) - now the "can MCP do X?" authority;
+  `toolset_map.md` keeps the inventory role. Method: T1 static full sweep (all 52
+  `describe_toolset` cached -> **830/830 tools parsed, 0 mismatch** vs the baseline; **64
+  declared-limit statements** mined from Epic's own descriptions; gating map from `.uplugin`
+  dependencies) + T2 read-only domain probes (~20 domains verified) + Axis C negative-space
+  word-token search over all 830 tool + 52 toolset names.
+- Key results: **16 UE areas covered, 8 partial, 16 absent**; zero-exposure areas include
+  Landscape, Foliage, UV, Audio, Source control, Localization, Movie Render/media,
+  Profiler/Insights, Virtual production, Enhanced Input, Mutable, NNE, Chooser.
+- Opt-in plugin value quantified: `LiveCodingToolset` +1 tool (the only C++ compile path),
+  `ChaosClothAssetToolset` +6, `MVVMToolset` +9, but **`MetaHumanGenerator` +0 and
+  `SequencerAnimMixerToolset` +0** (descriptor-only stub) - so "enable the plugin" is not
+  universally a capability win.
+- **Official plugin pairing (§1.3/§1.4)**: `AIAssistant` (**EDA**) adds 2 editor-context
+  tools (`GetProjectContext`, and `GetDockedContext` = which asset/graph the user is editing
+  plus their selected nodes); plus two out-of-band official channels covering MCP blind
+  spots - `CmdLinkServer` (console commands over a Windows named pipe; **enabled by
+  default**) and `PythonScriptPlugin` remote execution. **Therefore the absent capabilities
+  are an MCP-EXPOSURE gap, not an engine gap** - never tell a user "UE can't do X" when the
+  truth is "MCP can't reach the plugin that does X".
+- **New 5.8.3 trap recorded (G19)**: `find_actors.collision_channels` is declared
+  `array of string` but is an ENUM array - `[]`/`[0]` work, `["WorldStatic"]` fails with a
+  generic "could not convert ... to a UStruct" that never names the culprit.
+- C++ boundary documented (consumption-side only: reflection/BP-binding/plugin scaffolding
+  yes; source I/O, C++ class creation and compile no).
+- README: EN-editor-language limitation note added (localized editor renames node families,
+  so node creation by `type_id` silently fails; `culture = en` is not sufficient).
+
+## v3.13.0 (2026-09-24)
+- UE 5.8.3 tool-layer baseline re-verification: 52 toolsets / 830 tools, 0/144 broken refs,
+  Pitfalls compressed under its 12 KB budget, and `refresh_schemas.ps1 -Live` fixed - it had
+  never worked (PS 5.1 `Invoke-WebRequest` throws on the empty-body 202 notification reply).
+- New tooling: `scripts/snapshot_toolsets.py` (all-toolset snapshot) and
+  `references/ue583_baseline.json` (the frozen 5.8.3 inventory used for drift comparison).
+
 ## v3.12.0 (2026-09-11)
 - **Project-open intake law**: user gives project link/name → resolve → ONE confirmation
   round with full pre-flight (path, engine, plugin audit, UE-running state; doubles as

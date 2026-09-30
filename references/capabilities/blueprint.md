@@ -36,13 +36,13 @@
 | `get_default_object` | blueprint:ref → CDO ref |
 | `get_graph` | blueprint:ref, graph_name:"EventGraph" |
 | `list_graphs` / `list_functions` | blueprint:ref — graph/function discovery + existence guards |
-| `add_variable` | blueprint, name, type_name ("bool"/"int"/"float"/"string"/"Vector"/...) |
+| `add_variable` | blueprint, name, type_name ("bool"/"int"/"float"/"string"/"Vector"/...) [, container_type] [, graph] |
 | `add_object_variable` / `add_struct_variable` | blueprint, name, object_class:ref / struct_type:ref |
 | `write_graph_dsl` | graph:ref, code:str — writes AND compiles (compile failure leaves written graph) |
 | `read_graph_dsl` | graph:ref — readback prints INTERNAL bool ids (b-prefixed); unwired/unused binds pruned; auto-stub events (Tick/Overlap skeletons) may appear in fresh BPs |
 | `compile_blueprint` | blueprint:ref [, warnings_as_errors] |
 | `find_node_types` / `get_node_type_pins` | graph, type_id_filter / type_id — cross-BP ids appear WITHOUT context (context_pins=[] works, 2026-09-06) |
-| `find_nodes` / `delete_node` | graph, title[, entry_points_only] / node:ref — NOTE: event entry titles don't match "EventBeginPlay" string (found 0 in test); delete by exact refPath instead |
+| `find_nodes` / `delete_node` | graph, title[, entry_points_only][, node_class] / node:ref — NOTE: event entry titles don't match "EventBeginPlay" string (found 0 in test); delete by exact refPath instead |
 | `add_event` | blueprint, event_name, position? |
 | `add_function_graph` / `remove_function_graph` | blueprint, graph_name |
 | `add_function_param` / `remove_function_param` | graph, param_name, param_type, input_param:bool — input_param=false declares the RETURN value (param_name="ReturnValue"); REQUIRED for ReturnValue pin on call nodes (R24) |
@@ -50,6 +50,12 @@
 | UMGToolSet: `CreateWidgetBlueprint` | folderPath, assetName, parentClass:ref(/Script/UMG.UserWidget) |
 | UMGToolSet: `CompileWidgetBlueprint` | widgetBlueprint:ref |
 | ProgrammaticToolset: `execute_tool_script` | script:str — sandbox: json/math/re/time/copy/datetime only (NO unreal import); aborts on first tool error; run() MUST return dict |
+
+BlueprintTools grew to 53 tools in 5.8.3 (was 48). The 5.8.3-newly-available ones are catalogued in
+`references/tool_schemas.md` (single source — not duplicated here): `get_graph_dsl_docs` (authoritative
+in-engine DSL grammar — but see its Switch error in node_types.md), `find_node_categories`,
+`retarget_node_class`, `list_compatible_event_functions`, `get_create_event_function`,
+`add_component_bound_event`, `set_variable_instance_editable`. `[VERIFIED 2026-09-24 UE5.8.3-EN]`
 
 ## 4. Laws (domain)
 - **G6 DSL structure (#12 #14 #30 #48b)**: top level = event/fn only; arithmetic binary; input-key events via create_node; for/if bodies = SetVar/PrintString only.

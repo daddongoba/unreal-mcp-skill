@@ -2,6 +2,11 @@
 
 > Verified against UE5.8 English locale, 2026-08-22; live re-verified rules R1/R24/R25/R26 on 2026-09-06 (CCC test bed).
 > Full official grammar: call `BlueprintTools.get_graph_dsl_docs` (runtime, always current).
+> ⚠ **One known error in those engine docs** `[VERIFIED 2026-09-24 UE5.8.3-EN]`: its SWITCH ALIASES
+> section claims `int → Utilities|FlowControl|SwitchOnInt`, but that id does not exist — the live id is
+> `Utilities|FlowControl|Switch|SwitchonInt` (see node_types.md). The `(switch int …)` alias itself is
+> fine; only the hand-written full type_id fails. Also note `get_graph_dsl_docs` omits `;` comments,
+> the deprecated `(neg expr)` alias, and the `(bind var (NodeType…))` form for naming multi-exec outputs.
 
 ## 1. Core Grammar Cheat Sheet
 

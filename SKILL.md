@@ -13,7 +13,7 @@ description: >-
 
 # Unreal MCP Development
 
-skill_version: 3.12.0
+skill_version: 3.16.0
 designed-for: strong-model | weaker-model fallback: references/compatibility.md (baseline test + weak-mode rails)
 
 ## Capability Router (v3.0 — read this table FIRST for any task)
@@ -35,6 +35,25 @@ designed-for: strong-model | weaker-model fallback: references/compatibility.md 
 Routing rule: match the task to a domain row → read that doc → design check → build. Ambiguous tasks (e.g. "interactive prop with VFX"): read ALL matched domains' Boundaries sections first. New lessons land in the matching capability-doc (§4 Laws) — SKILL.md only grows for cross-domain laws.
 
 Cross-domain knowledge kept here (applies everywhere): DSL language reference (`references/dsl_syntax.md` R1-R23 + node_types.md), node dictionary (node_dictionary_merged.json), full API dictionary (ue_dict_full.json.gz — local path, -DictPath to override), few_shots.md behavioral cases, capability boundaries overview (`references/toolset_map.md`).
+
+## Development-Mode Selection (C++ vs MCP/Blueprint) — decide BEFORE building `[user mandate 2026-09-30]`
+
+**Never default to MCP/Blueprint.** For every feature request, state ONE line of routing judgement — C++ (project module) vs MCP DSL/Blueprint — with the reason, THEN start building. The project owner made this a hard rule of their UE development convention (2026-09-30), after a session where blueprint-only assumptions cost rounds.
+
+Judge which path is **cheaper to build AND verify**:
+
+| Lean C++ (project module, produced outside MCP) | Lean MCP / Blueprint |
+|---|---|
+| runtime / gameplay / engine-layer logic | scene placement, transforms, tuning |
+| compile-time types, loops, batching, algorithms | asset property edits, one-off editor operations |
+| must ship in a packaged build | fast play-test iteration, throwaway experiments |
+| API meant to be reused by designers | tiny change radius (1-2 nodes, a few properties) |
+
+Tie-breaker: the smaller **change radius + verification cost** wins (one CDO default → MCP `set_properties`; N same-shaped actors carrying computed values → C++ + an editor utility).
+
+Constraints that decide it for you:
+- MCP **cannot** produce C++ — no file I/O, no class creation, no compile (`references/capability_boundaries.md` §5). A C++ path is two-phase: produce outside (file tools + `Engine\Build\BatchFiles\Build.bat`), consume inside MCP. Editing `.uproject` / `Build.cs` / source files = Danger Gate #3 (explicit request in the current message).
+- Verification differs: MCP writes → compile + readback (+ PIE for behaviour); C++ → build receipt + a runtime/PIE check.
 
 ## Self-Maintenance Protocol
 
@@ -65,7 +84,7 @@ The Pitfalls section carries a **12KB budget** (≈25% of SKILL.md's activation 
 2. If still over budget: archive the LOWEST value-density entries (frequency × severity) — NOT the oldest — to `references/pitfalls_archive.md`.
 Entry count is a diagnostic, not a rule. SKILL.md keeps only laws and pointers.
 
-**Current state**: v3.12.0 (2026-09-11) — Project-open intake law added to One-Click Connect: user gives project link/name → resolve path (name-only = scan+match, ambiguous → candidate list) → ONE confirmation round carrying the full pre-flight (path, autodetected engine, plugin audit, UE-already-running state; the message doubles as --fix-plugins consent when plugins are listed missing) → only then `ue_connect.py launch` + `wait` (never raw-shell spawn). Prior: v3.11.0 One-Click Connect (`scripts/ue_connect.py` check/launch/wait/all; E2E-verified: real ghost python process on 8000 caught → killed → launch → wait 289s → 67 toolsets → reconnect 1s → exit 0; all-mode timeout bug fixed in-run); v3.10.0 macOS twin (py script twins + platform-macos.md §0 platform-detection dispatch); v3.9.0 TestT1 forensics case + conventions §6-§10; v3.8.0 G17/R27; v3.7.0 G16/R24-26; v3.6 dict tooling + hard rail. Architecture: 11 capability docs + router (v3.0).
+**Current state**: v3.16.0 (2026-09-30) — **Host/environment lessons batch-committed** (one 2026-09-30 session, UE 5.8.3 + RTX 3080 10 GB / 32 GB host): three new env-session §4 laws — **G21** host-memory exhaustion masquerading as GPU OOM (`D3D12Util.cpp:815`, VRAM had 6.4 GB free while commit was full; fixes = fewer shader workers + bigger pagefile, the latter only via the registry — WMI `Put()` fails), **G22** `ue_connect.py wait` 420 s timeout ≠ failure (SM6 first-activation load took 1136 s; poll again, don't relaunch), **G23** Nanite "Missing Project Settings" = missing `+D3D12TargetedShaderFormats=PCD3D_SM6` (first load 1136 s → 14 s once DDC-warm) — plus a **G21** pointer in Common Pitfalls and the timeout clause in One-Click Connect. Prior: v3.15.0 (2026-09-30) — **Development-Mode Selection law added** (router-level gate, user mandate 2026-09-30): for every feature request, judge C++ vs MCP/Blueprint by build+verify cost and state the reason *before* building — never default to MCP/Blueprint; cross-referenced from `references/capability_boundaries.md` §5. Prior: v3.14.0 (2026-09-25) — **full capability-boundary survey on UE 5.8.3.** New artifact **`references/capability_boundaries.md`** (three-axis boundary map: toolset layer / per-domain verdicts / substantiated absences) — this is now the "can MCP do X?" authority; `toolset_map.md` keeps the inventory role. Method: T1 static full sweep (all 52 `describe_toolset` cached → **830/830 tools parsed, 0 mismatch** vs the baseline; **64 declared-limit statements** mined from Epic's own descriptions; gating map from `.uplugin` dependencies) + T2 read-only domain probes (~20 domains verified) + Axis C negative-space word-token search over all 830 tool + 52 toolset names. Key results: **16 UE areas covered, 8 partial, 16 absent**; zero-exposure areas include Landscape, Foliage, UV, Audio, Source control, Localization, Movie Render/media, Profiler/Insights, Virtual production, Enhanced Input, Mutable, NNE, Chooser. Opt-in plugin value quantified: `LiveCodingToolset` +1 tool (the only C++ compile path), `ChaosClothAssetToolset` +6, `MVVMToolset` +9, but **`MetaHumanGenerator` +0 and `SequencerAnimMixerToolset` +0** (descriptor-only stub) — so "enable the plugin" is not universally a capability win. **Official plugin pairing added (§1.3/§1.4)**: `AIAssistant` (**EDA** — Epic Developer Assistant) adds 2 editor-context tools (`GetProjectContext`, and `GetDockedContext` = which asset/graph the user is editing plus their selected nodes) — the highest-DX add; plus two **out-of-band official channels** covering MCP's blind spots — `CmdLinkServer` (console commands over a Windows named pipe; **enabled by default**) and `PythonScriptPlugin` remote execution (arbitrary unsandboxed Python). **Therefore the absent capabilities are an MCP-EXPOSURE gap, not an engine gap** — never tell a user "UE can't do X" when the truth is "MCP can't reach the plugin that does X". **New 5.8.3 trap found and recorded (G19)**: `find_actors.collision_channels` is declared `array of string` but is an ENUM array — `[]`/`[0]` work, `["WorldStatic"]` fails with a generic "could not convert … to a UStruct" that never names the culprit. C++ boundary documented (consumption-side only: reflection/BP-binding/plugin scaffolding yes; source I/O, C++ class creation and compile no). Prior: v3.13.0 UE 5.8.3 tool-layer baseline re-verification (52 toolsets/830 tools, 0/144 broken refs, Pitfalls compressed under its 12KB budget, `refresh_schemas.ps1 -Live` fixed — it had never worked); v3.12.0 Project-open intake law; v3.11.0 One-Click Connect (`scripts/ue_connect.py`); v3.10.0 macOS twin; v3.9.0 TestT1 forensics; v3.8.0 G17/R27; v3.7.0 G16/R24-26; v3.6 dict tooling + hard rail. Architecture: 11 capability docs + router (v3.0).
 
 **Numbering note**: templates/archives may cite external IDs (P40-P49 = history/UE_Test_Achievements.md test-log IDs). Authoritative pitfall IDs are the ones in this file only; on conflict trust this file.
 
@@ -85,7 +104,8 @@ When a DSL workflow is fully verified in PIE:
 
 | Change | Re-review scope |
 |--------|-----------------|
-| UE minor upgrade (5.8→5.9) | node type_ids, DSL syntax rules, all templates |
+| UE **patch** upgrade (5.8.0→5.8.3) | **Measured 2026-09-24**: tool layer was intact — 0/144 broken references, 0 param DRIFTs, only additive optional params + a few new tools. Cheap check that suffices: `scripts/snapshot_toolsets.py --diff references/ue583_baseline.json` + `refresh_schemas.ps1 -Live`. Node type_ids/DSL/templates were NOT re-run (assume stable, verify on first use). |
+| UE minor upgrade (5.8→5.9) | node type_ids, DSL syntax rules, all templates — plus the patch-upgrade checks above |
 | Editor language switch (EN↔CN) | node_types.md, all DSL templates, encoding rules |
 | Toolsets plugins added/removed | Toolset Reference table, affected templates |
 | Codely CLI upgrade | startup-order rule (Pitfall #15), Pattern 0 vs A/B priority |
@@ -105,12 +125,12 @@ Before each re-package/install, copy the skill folder to `~/.codely-cli/skills/_
 ## One-Click Connect (novice connectivity mode, v3.11)
 
 Connectivity requests ("连不上/连UE/为什么工具不可用") or novice first-run → `python3 scripts/ue_connect.py check` FIRST (read-only diagnosis: UE process, port 8000 vs real /mcp endpoint, NON-UE port listeners, .uproject plugin audit; state cached at ~/.codely-cli/ue_connect_state.json so later runs need no args). Verdicts drive the fix:
-- UE not running → `launch` (detached spawn with -ModelContextProtocolStartServer, engine autodetected, returns immediately) → `wait` (30s progress prints, ~4.5 min first load, full handshake + toolset count on success). Run launch and wait as SEPARATE shell calls (tree-kill lesson).
+- UE not running → `launch` (detached spawn with -ModelContextProtocolStartServer, engine autodetected, returns immediately) → `wait` (30s progress prints, ~4.5 min first load, full handshake + toolset count on success). Run launch and wait as SEPARATE shell calls (tree-kill lesson). **A 420 s `wait` timeout is NOT failure** — first activation of a new targeted shader format, cold shader maps or a heavy WP map legitimately run longer (1136 s measured 2026-09-30); verify the log is advancing and just poll again instead of relaunching (`capabilities/env-session.md` §4 G22).
 - Plugins missing → ask user (Danger Gate #3: .uproject edit) → `launch --fix-plugins` (writes .uproject.bak first).
 - Port held by non-UE listener (initialize→404) → report PID-hunting commands; kill it, then launch. `[VERIFIED 2026-09-11: caught a real ghost python process squatting on 8000]`
 - UE running but /mcp dead → console `ModelContextProtocol.StartServer` or relaunch.
 - Session-side (agent checks own tool list): native call_tool missing = Codely started before UE → mcp_call.py fallback keeps everything working immediately; recommend Codely restart for native tools.
-E2E-verified 2026-09-11 on Windows: ghost-port diagnosis → launch → wait 289s → 67 toolsets → all-mode reconnect (1s) → check exit 0.
+E2E-verified 2026-09-11 on Windows: ghost-port diagnosis → launch → wait 289s → 52 toolsets → all-mode reconnect (1s) → check exit 0.
 
 **Project-open intake (both platforms, v3.12)**: when the user provides a project link/name to open (fresh install onboarding or any "帮我打开项目" request):
 1. Resolve the .uproject path (user-given path; or if only a name is given, scan plausible roots — Desktop/Documents/common project dirs — and match `<Name>/<Name>.uproject`; ambiguous matches → list candidates and ask).
@@ -176,8 +196,8 @@ Natural cleanup points: immediately after successful import verification; on exp
 ### Required Plugins in .uproject
 
 5-plugin JSON block + core/minimal variants: see 
-eferences/capabilities/env-session.md §1 and 
-eferences/toolset_map.md. All engine built-ins.
+references/capabilities/env-session.md §1 and 
+references/toolset_map.md. All engine built-ins.
 
 ### Launching UE
 
@@ -213,7 +233,7 @@ Returns HTTP 200 with `"protocolVersion": "2024-11-05"` if connected.
 
 ### Verifying Toolsets
 
-After connecting, call `list_toolsets` to verify available toolsets. With AllToolsets enabled, expect 30+ toolsets. With minimal setup (no AllToolsets), expect 18+.
+After connecting, call `list_toolsets` to verify available toolsets. With AllToolsets enabled, expect **52** toolsets (UE 5.8.3). With minimal setup (no AllToolsets), expect 18+. ⚠ Do not count `list_toolsets` output lines — description bullet lines also start with `- ` and inflate the total (see toolset_map.md).
 
 If toolsets are missing, check that `.uproject` has `ToolsetRegistry`, `EditorToolset`, and `PythonScriptPlugin` enabled. After adding plugins, restart UE editor.
 
@@ -266,20 +286,16 @@ Idempotency guards table + full step details: `references/capabilities/blueprint
 ## Scene Operations
 
 spawn/find/remove/trace/get_current_level params: 
-eferences/capabilities/scene-actors.md 搂3.
+references/capabilities/scene-actors.md §3; domain laws §4 — incl. **G20: adding a level carries its world-global actors (an unbound PostProcessVolume will turn the host scene black)**.
 
 ## Common Pitfalls (Law Groups)
 
-Format: `G. [Tag] Law`: symptom → fix. Grouped by semantic law (v2.11 refactor) — original pitfall numbers cited in parens for cross-reference with templates/archive/history; do NOT renumber. Incidents #1-#4 predate this format (encoded as dsl_syntax rules R3/R4/R6 + Idempotency table — see `references/pitfalls_archive.md` v2.3.1 section). Full per-incident detail: `references/history/UE_Test_Achievements.md`.
+Format: `G. [Tag] Law`: symptom → fix. Grouped by semantic law (v2.11 refactor) — original pitfall numbers cited in parens; do NOT renumber. Incidents #1-#4 predate this format (encoded as dsl_syntax R3/R4/R6 + Idempotency table — see `references/pitfalls_archive.md` v2.3.1). Full per-incident detail: `references/history/UE_Test_Achievements.md`.
 
-**Domain laws G1/G4 (physics-collision) and sequencer specifics now live in `references/capabilities/*.md` §4 — the entries below are kept as cross-reference stubs during the v2.14 pilot.**
-
-### G1 [Collision] Overlap & trigger semantics (#10 #41 #45 #48 #51) → MOVED to capabilities/physics-collision.md §4
-
-### G4 [Collision] Physics activation chain (#7 #8 #35 #38 #40) → MOVED to capabilities/physics-collision.md §4
+### G1/G4 [Collision] → MOVED to `capabilities/physics-collision.md` §4 (G1: #10 #41 #45 #48 #51 · G4: #7 #8 #35 #38 #40)
 
 ### G2 [Node] Graph rewrite & id round-trip asymmetries (#49 #50 #33)
-`write_graph_dsl` MERGES, never replaces — after any semantic rewrite, `find_nodes(title=...)` + `delete_node` stale entry points/orphans, then readback-verify absence AND presence (#49). Bool variable nodes: INPUT uses display name (`GetArmed`), READBACK prints internal (`GetbArmed`) — never feed readback ids back verbatim (#50). Duplicate nodes accumulate across failed retries — audit + dedupe before wiring (#33). READBACK CASING (2026-09-06, TestT1 case): readback prints display-styled casing (`AddToViewport`) while the registered id is `AddtoViewport` — readback comparisons must be case-insensitive; stored node type_id may also drop the `Class|` prefix entirely (`|UpdateCount`) — match by trailing function name, not full id.
+`write_graph_dsl` MERGES, never replaces — after any semantic rewrite, `find_nodes(title=...)` + `delete_node` stale entries/orphans, then readback-verify absence AND presence (#49). Bool var nodes: INPUT uses display name (`GetArmed`), READBACK prints internal (`GetbArmed`) — never feed readback ids back verbatim (#50). Duplicates accumulate across failed retries — audit + dedupe before wiring (#33). READBACK CASING (2026-09-06, TestT1): readback prints display-styled casing (`AddToViewport`) vs registered `AddtoViewport` — compare case-insensitively; stored type_id may drop the `Class|` prefix (`|UpdateCount`) — match by trailing function name, not full id.
 
 ### G3 [Flow] Save/persist is UNTRUSTWORTHY — verify on disk, TIERED (#19 #43 #46) [revised v3.1]
 `save_assets`/`duplicate` return values LIE — but only for WorldPartition/level saves (2 incidents, both .umap). TIERING: `.umap`/WP-level saves and `duplicate` → ALWAYS disk-verify; regular asset saves (.uasset BPs/materials/sequences) → spot-check first save of a session, then trust `returnValue:true`. WorldPartition `/Temp` levels: `load_level` blocked; `duplicate` unreliable as a save (HLOD private refs); real persistence = manual Save Level As or autosaves (#43). New assets are NOT auto-saved — `save_assets` after every batch (#19).
@@ -297,7 +313,7 @@ Path types differ: asset `BP.BP` / graph `BP.BP:EventGraph` / CDO `Default__BP_C
 Template-verified type_ids (those already cited in templates/dsl_syntax/node_types) are SAFE to use directly — no probe needed. Only genuinely unknown nodes require `find_node_types` / `get_node_type_pins` first. Per-toolset schemas: if calling ≥3 different tools of one toolset, ONE `describe_toolset` beats error-iterating each; for single calls the error-iterate loop (G12) is faster. Baked shortcuts: `references/tool_schemas.md` + `scripts/search_node_dict.ps1` (offline node/pin lookup: merged dict + verified extras; the raw `node_dictionary_merged.json` is a 734KB single-line JSON — unreadable via read_file, ONLY searchable via the script).
 
 ### G9 [Flow] Instance/template split (#25 #34 #47 #53)
-Placed instances do NOT pick up template edits — re-place after compile+save (stale PIE bindings) (#25). WorldSettings GameMode override via set_properties (#34, archived). Level blueprints are lazily created (open once in editor before tools can see them); `LS_*.uasset` = LevelSequence, NOT a level; prefer cross-BP calls / GameMode BP over level blueprints (#47). Instance component struct props apply FIRST SCALAR ONLY — set single-leaf structs per call, or re-place from template (#53). Object-reference setting: CDO TEMPLATE component refs ARE settable (SkeletalMesh→component worked); RUNTIME-INSTANCE object vars and ASSET-level refs (SkeletalMesh→Skeleton) are NOT (2026-08-29) — fix at the right layer or re-import.
+Placed instances do NOT pick up template edits — re-place after compile+save (stale PIE bindings) (#25). WorldSettings GameMode override via set_properties (#34, archived). Level blueprints are lazily created (open once in editor first); `LS_*.uasset` = LevelSequence, NOT a level; prefer cross-BP calls / GameMode BP over level blueprints (#47). Instance component struct props apply FIRST SCALAR ONLY — set single-leaf structs per call, or re-place from template (#53). Object refs: CDO TEMPLATE component refs ARE settable; RUNTIME-INSTANCE object vars and ASSET-level refs (SkeletalMesh→Skeleton) are NOT (2026-08-29) — fix at the right layer or re-import.
 
 ### G10 [Other] Environment & session traps (#4 #6 #15 #16 #18 #22)
 Scripts abort on first tool error (try/except does NOT catch) — keep idempotent, results[] lists, risky calls last (#4-family, active #42). UE must be up before Codely starts or MCP tools never register (#15). write_file needs absolute paths into Content/Saved (#16). Native dialogs (firewall/Restore Packages) block headlessly — see screen_control.md (#18). SlateInspector recovers via Observe cycle + 5s wait (#22). Console/OutputLog drawer + LiveCoding specifics: archived #17 #21 #23 #39; Sequencer/Niagara/SaveGame specifics: archived #31 #32 #36 #37 — `references/pitfalls_archive.md`.
@@ -305,34 +321,34 @@ Scripts abort on first tool error (try/except does NOT catch) — keep idempoten
 ### G11 [Flow] Scene placement reality (#20 #24 #44)
 OpenWorld terrain buries actors — `trace_world` BEFORE placing, keep above ground (#24). PIE instances live at `/Memory/UEDPIE_N_` paths — use those for live reads (#20). Read PlayerStart transform first; place demos 800-1200 units along its facing; FocusOnActors after (#44).
 
-### G12 [Other] Cross-toolset survey laws (2026-08-29 capability survey)
-**Param-name anarchy is the norm**: every toolset uses different conventions (`folder_path+asset_name` vs `package_path+asset_name` vs `path` vs `assetPath+assetName` camelCase vs `mesh` ref) — and **error messages self-document**: missing-param errors name the exact required param, type errors name the expected class. Iterate: send minimal args → read error → add the named param → repeat. 3-4 rounds reaches a working call; do NOT describe_toolset-guess first for simple calls. Class-typed params (track_type/section_type/templateSystem/component_type) want OBJECT paths with dot suffix (`/X/Y.Z`), not asset paths. World-typed params want the World object (`/Game/L.L`), NOT `:PersistentLevel`. Actor-typed params want LIVE actor refs (find_actors fresh — stale UAIDs fail "not valid Actor for TransientPythonProperty"). `[VERIFIED 2026-08-29 UE5.8-EN — 17-round systematic survey]`
+### G12 [Other] Cross-toolset survey laws (2026-08-29)
+**Param-name anarchy is the norm** — every toolset uses different conventions (`folder_path+asset_name` vs `package_path+asset_name` vs `path` vs camelCase `assetPath+assetName` vs `mesh` ref) — and **errors self-document**: missing-param errors name the required param, type errors name the expected class. Iterate: minimal args → read error → add the named param → repeat; 3-4 rounds reaches a working call. Do NOT describe_toolset-guess first for simple calls. Class-typed params (track_type/section_type/templateSystem/component_type) want OBJECT paths with dot suffix (`/X/Y.Z`), not asset paths. World-typed params want the World object (`/Game/L.L`), NOT `:PersistentLevel`. Actor-typed params want LIVE refs (find_actors fresh — stale UAIDs fail "not valid Actor for TransientPythonProperty"). `[VERIFIED 2026-08-29 UE5.8-EN]`
 
-### G13 [Other] UE modals dismiss via PostMessage, NOT synthetic clicks; AnimBP create refused at tool layer (2026-08-29)
-UE native modal Message boxes ignore simulated cursor events (SetCursorPos+mouse_event failed twice with verified coords); **PostMessage WM_CLOSE(0x0010) to `FindWindow(NULL,"Message")` works instantly**; MCP resumes in ~5-10s — poll initialize, then save_assets([])+disk-verify mid-flight assets (all survived). Full procedure: `references/screen_control.md`. AnimBP create confirmed dead: engine REFUSES outright ("Cannot create a blueprint based on the class 'AnimBlueprint'") — tool-layer rejection, not just a modal. `[VERIFIED 2026-08-29 UE5.8-EN — remote rescue performed for user]`
+### G13 [Other] UE modals: PostMessage, NOT synthetic clicks; AnimBP create refused at tool layer (2026-08-29)
+UE native modal Message boxes ignore simulated cursor events (SetCursorPos+mouse_event failed twice with verified coords); **PostMessage WM_CLOSE(0x0010) to `FindWindow(NULL,"Message")` works instantly**; MCP resumes in ~5-10s — poll initialize, then save_assets([])+disk-verify mid-flight assets. Full procedure: `references/screen_control.md`. AnimBP create is dead: engine REFUSES outright ("Cannot create a blueprint based on the class 'AnimBlueprint'") — tool-layer rejection, not just a modal. `[VERIFIED 2026-08-29 UE5.8-EN]`
 
-### G14 [Flow] Level Instance coordinate-system separation (2026-08-29, user-reported incident)
+### G14 [Flow] Level Instance coordinate-system separation (2026-08-29)
+A level instance = a SHELL actor in the parent level + content in a sub-world. Coordinate tools (set_actor_transform/trace_world/find_actors) do NOT distinguish the two worlds. Moving a PLACEMENT must target the SHELL; find_actors can return refs INSIDE the instance world instead — then set_actor_transform silently rearranges INTERNAL actors while the placement never changes (returns success; invisible without a visual check).
+- Placement tasks: list ALL refs matching the instance name FIRST; pick the one whose refPath does NOT contain the instance-world prefix (the shell). Danger signal: refPath with a LevelInstanceActor/world-inner fragment in a placement task = wrong target.
+- Content tasks: explicitly edit_level_instance into the sub-world, operate on internal refs, exit.
+- After placement: R2 visual capture (only eyes confirm placement changed — this IS the visual-exclusive domain).
+- Wording tip: "实例在主关卡中的位置" means the SHELL; ask if ambiguous.
 
-A level instance = a SHELL actor in the parent level + its content living in a sub-world. Coordinate tools (set_actor_transform/trace_world/find_actors) do NOT distinguish the two worlds. Moving an instance's PLACEMENT must target the SHELL; find_actors can return refs INSIDE the instance world instead — then set_actor_transform silently rearranges the instance's INTERNAL actors while the placement never changes (tool returns success; error is invisible without visual check).
-
-- Fix (placement tasks): list ALL refs matching the instance name FIRST; pick the one whose refPath does NOT contain the instance-world prefix (the shell). Danger signal: refPath containing a LevelInstanceActor/world-inner fragment in a placement task = wrong target.
-- Fix (content tasks): explicitly edit_level_instance into the sub-world, operate on internal refs, exit.
-- After placement: R2 visual capture (only eyes confirm placement changed) — per Visual-Capture Gate, this IS the visual-exclusive domain.
-- User wording tip: requests saying "实例在主关卡中的位置" mean the SHELL; ask/confirm if ambiguous which world is meant.
-### G15 [Node] Graph hygiene: incremental edit tiers + orphan sweep (2026-08-29, dup-incident)
-
-Repeated DSL writes accumulate duplicate event entries + orphan chains (observed: 7 dead K2Node_Event entries, counter at _281 for 87 live nodes). write_graph_dsl MERGES (G2) and failed-retry halves also leave bodies (#33) — AND entry-deletion alone does not remove their call-chain bodies.
-
+### G15 [Node] Graph hygiene: incremental edit tiers + orphan sweep (2026-08-29)
+Repeated DSL writes accumulate duplicate event entries + orphan chains (observed: 7 dead K2Node_Event entries, counter at _281 for 87 live nodes). write_graph_dsl MERGES (G2) and failed-retry halves leave bodies (#33) — entry-deletion alone does NOT remove their call-chain bodies.
 - Edit tiers: <3 node changes → node surgery (find_nodes + set_pin_value/connect_pins/delete_node, zero residue); logic-branch changes → read_graph_dsl, edit text, write back, then IMMEDIATELY sweep; architecture changes → full rebuild (delete entries, fresh write).
-- Orphan sweep (verified method): find entry nodes → BFS get_connected_subgraph to collect live set → delete(all_nodes − live_set) → verify live==total. Zero-orphan result achievable (87/87 verified).
-- NEW TRAP: read_graph_dsl/find_nodes can return EMPTY after compile+save sequences (editor graph cache). Recover: reopen via OpenEditorForAsset, or re-compile; get_node_infos/get_connected_subgraph keep working as fallback read channels.
-- Duplicate diagnosis signature: multiple K2Node_Event_* with wired-pins=0 in get_node_infos.
+- Orphan sweep (verified): find entry nodes → BFS get_connected_subgraph for the live set → delete(all_nodes − live_set) → verify live==total. Zero-orphan achievable (87/87 verified).
+- TRAP: read_graph_dsl/find_nodes can return EMPTY after compile+save (editor graph cache). Recover: reopen via OpenEditorForAsset, or re-compile; get_node_infos/get_connected_subgraph keep working as fallback read channels.
+- Duplicate signature: multiple K2Node_Event_* with wired-pins=0 in get_node_infos.
 
-### G16 [Node] Cross-BP node creation & the dictionary-namespace trap (2026-09-06, user-reported mystery resolved)
-User report "create_node cannot create cross-BP nodes (declaring_class either), Utilities|ToString(Integer) does not exist, write_graph_dsl is the only path" — LIVE-TESTED, all three FALSE on UE5.8: (a) create_node DOES create cross-BP nodes with `Class\|<NameNoUnderscores>\|<Func>` — works in Actor BP AND WBP graphs, against UNCOMPILED targets, no declaring_class needed (and declaring_class cannot rescue bare function names); (b) ToString works at FULL path `Utilities\|String\|ToString(Integer)` — the reported form was missing the String segment; (c) BOTH create_node and write_graph_dsl construct cross-BP nodes (DSL preferred: wires in one shot). REAL ROOT CAUSE = THE NAMESPACE TRAP: node_dictionary display_name/category are PALETTE names, NOT tool type_ids (`float * float`→`Utilities\|Operators\|Multiply`; `Flow Control\|Branch`→`Utilities\|FlowControl\|Branch`; `To String (Integer)`→`Utilities\|String\|ToString(Integer)`); display forms FAIL in create_node — verify dictionary-sourced ids with find_node_types first. Same battery also verified: function return type needs add_function_param(input_param=false) (DSL (return x) does NOT infer it — call nodes show no ReturnValue pin otherwise); multi-param events = ONE parenthesized list `(MyGeometry InDeltaTime)`; widget events need `AddEvent\|UserInterface\|` prefix (bare EventTick FAILS in WBP graphs); cross-BP :self target must be wired unless caller IS the target class (unwired → compile error naming the target class). `[VERIFIED 2026-09-06 UE5.8-EN — PIE end-to-end: spawned→called→printed "42"]`
+### G16 [Node] Cross-BP node creation & the dictionary-namespace trap (2026-09-06)
+Three user reports, all LIVE-TESTED FALSE: (a) create_node DOES create cross-BP nodes with `Class|<NameNoUnderscores>|<Func>` — Actor BP AND WBP graphs, against UNCOMPILED targets, no declaring_class (it cannot rescue bare names); (b) ToString works at the FULL path `Utilities|String|ToString(Integer)` — the reported form omitted the String segment; (c) BOTH create_node and write_graph_dsl build them (DSL preferred: wires in one shot). ROOT CAUSE = THE NAMESPACE TRAP: node_dictionary display_name/category are PALETTE names, not tool type_ids (`float * float`→`Utilities|Operators|Multiply`; `Flow Control|Branch`→`Utilities|FlowControl|Branch`; `To String (Integer)`→`Utilities|String|ToString(Integer)`); display forms FAIL in create_node — verify dictionary-sourced ids with find_node_types first. Same battery verified: return type needs add_function_param(input_param=false) (DSL (return x) does NOT infer it — call nodes otherwise show no ReturnValue pin); multi-param events = ONE parenthesized list `(MyGeometry InDeltaTime)`; widget events need `AddEvent|UserInterface|` prefix (bare EventTick FAILS in WBP graphs); cross-BP :self must be wired unless caller IS the target class. `[VERIFIED 2026-09-06 UE5.8-EN — PIE: spawned→called→printed "42"]`
 
-### G17 [Node] Cast-family trap: inverted underscore rule + locale + the GAOC bypass (2026-09-06, user finding validated+extended)
-User reported: DSL failed on `Utilities|Casting|...` because their (Chinese-locale) palette shows `工具|Casting|...`, and discovered GAOC's ActorClass pin TYPES its output so no Cast is needed. LIVE-TESTED (EN locale) REFINED THE ROOT CAUSE: the id form was ALSO wrong — Cast node ids KEEP underscores (`Utilities\|Casting\|CastToBP_Inventory` works; stripped `CastToBPInventory` fails "does not exist" even in English, live-verified), the OPPOSITE of cross-BP call rule R12. Project-BP casts are NOT in the palette list (engine-class casts only, 5964 nodes) — only find_node_types with the underscore-kept name finds them. Cast category likely localizes in zh editors while function-node categories (Actor\|, Game\|...) keep untranslated metadata — EITHER error kills Cast, and the two rules (R12 strip vs R15 keep) being opposite makes Cast the #1 footgun. **PATTERN: prefer typed-source over Cast** (R27): generic nodes with Class pins output the specialized type — `(Actor\|GetAllActorsOfClass :ActorClass "BP_Inventory_C")` → foreach elem feeds `Class\|BPInventory\|GetTotalItems :self elem` directly. PIE-verified: printed 42 per found instance, zero Cast nodes. Use Cast only when no typed source exists (GameMode→Door chains), and remember its underscore-kept id. `[VERIFIED 2026-09-06 UE5.8-EN — CastToBP_Inventory create + GAOC no-cast chain both compiled & PIE'd]`
+### G17 [Node] Cast-family trap: inverted underscore rule + locale + the GAOC bypass (2026-09-06)
+User finding validated + extended. DSL failed on `Utilities|Casting|...` in a zh-locale editor (palette `工具|Casting|...`); GAOC's ActorClass pin TYPES its output, so no Cast needed. LIVE-TESTED (EN) refined the root cause: the id form was ALSO wrong — Cast ids KEEP underscores (`Utilities|Casting|CastToBP_Inventory` works; stripped `CastToBPInventory` fails "does not exist" even in English), opposite of cross-BP rule R12. Project-BP casts are NOT in the palette list (engine-class casts only, 5964 nodes) — only find_node_types with the underscore-kept name finds them. Cast's category likely localizes in zh editors while function-node categories (Actor|, Game|...) stay untranslated — EITHER error kills Cast; the two opposite rules (R12 strip vs R15 keep) make Cast the #1 footgun. **PATTERN: prefer typed-source over Cast** (R27): generic nodes with Class pins output the specialized type — `(Actor|GetAllActorsOfClass :ActorClass "BP_Inventory_C")` → foreach elem feeds `Class|BPInventory|GetTotalItems :self elem` directly (PIE-verified: printed 42 per instance, zero Cast nodes). Use Cast only when no typed source exists (GameMode→Door chains) — remember its underscore-kept id. `[VERIFIED 2026-09-06 UE5.8-EN — CastToBP_Inventory + GAOC no-cast chain both compiled & PIE'd]`
+
+### G21 [Other] Host-memory exhaustion masquerading as GPU OOM (`OutOfMemory` + `D3D12Util.cpp:815 "Out of video memory"`) (2026-09-30)
+VRAM had 6.4 GB free of a 9.3 GB budget while RAM/commit was exhausted (1.76 GB free of 32 GB; commit 46.9/47.2 GB) — the D3D12 allocation died for lack of host commit. Read the full memory block at the fatal error before blaming the GPU; fixes (fewer shader workers, bigger pagefile) and the exact numbers: `capabilities/env-session.md` §4 G21. Related: G23 (SM6 targeted formats) and G22 (long first load / `wait` timeout). `[VERIFIED 2026-09-30 UE5.8-EN diagnosis; mitigation UNVERIFIED]`
 
 ## Encoding Notes
 
@@ -347,7 +363,9 @@ If locale ever reverts to Chinese: see `scripts/mcp_call.ps1` (UTF-8-safe HTTP),
 | Node type_ids quick map / DSL grammar R1-R23 / error-fix table | `references/node_types.md` + `references/dsl_syntax.md` |
 | Node/pin lookup BEFORE writing DSL | `scripts/search_node_dict.ps1 -Query <name>` [-Exact] — searches merged dict (1665 library nodes) + `references/node_dict_extras.json` (PIE-verified Actor/Component members, special K2Nodes); offline, cheaper than find_node_types |
 | Full UE API dict (346K entries) | `ue_dict_full.json.gz` via `scripts/search_ue_dict.ps1` (-DictPath overrides local path) |
-| Tool param signatures | capability docs §3 + `references/tool_schemas.md` (cache; drift-guard via `scripts/refresh_schemas.ps1` — offline cross-check runs WITHOUT UE; `-Live` diffs live server) |
+| Tool param signatures | capability docs §3 + `references/tool_schemas.md` (cache; drift-guard via `scripts/refresh_schemas.ps1` — offline cross-check runs WITHOUT UE; `-Live` diffs live server, toolset-aware since 2026-09-24) |
+| **"Can MCP do X?" — boundary verdicts** (per-domain + substantiated absences + C++ + open items) | **`references/capability_boundaries.md`** — read this BEFORE promising any capability |
+| "Can MCP do X?" / toolset+tool inventory for the current engine | `references/ue583_baseline.json` (52 toolsets / 830 tools, UE 5.8.3) — re-snapshot + diff with `scripts/snapshot_toolsets.py` after any engine/plugin change |
 | Design conventions (component/event selection) | `references/ue_conventions.md` + capability docs §2 |
 | Behavioral cases (ask/decline/gates/template-hit) | `references/few_shots.md` |
 | Real-world failure case (scene-scan → cross-BP → widget chain; TestT1 inventory forensics 2026-09-06: dead-cast residue, GAOC class=0, same-name call drift, CreateWidget Class=0, Tick-refresh antipattern, readback casing) | `references/history/case_testT1_inventory.md` |
@@ -357,10 +375,11 @@ If locale ever reverts to Chinese: see `scripts/mcp_call.ps1` (UTF-8-safe HTTP),
 | Verified workflow templates | `references/templates/README.md` (17, ADAPT don't copy) |
 ## Toolset Reference
 
-Full 67-toolset landscape incl. core/extended tables, Niagara/animation families, and third-party extensions (VibeUE): 
-eferences/toolset_map.md (2026-08-29 survey-verified). Per-domain tool params: capability docs §3.
+Full 52-toolset landscape incl. core/extended tables, Niagara/animation families, and third-party extensions (VibeUE): 
+references/toolset_map.md (2026-08-29 survey; toolset inventory re-verified 2026-09-24 on UE 5.8.3). Per-domain tool params: capability docs §3.
+**Boundary verdicts live in `references/capability_boundaries.md`** — three-axis map (toolset layer / per-domain status with evidence tags / substantiated absences), plus the C++ boundary and the unresolved open items. Additions in 5.8.3 re-verification: opt-in plugin value is now quantified (LiveCoding +1, ChaosCloth +6, MVVM +9, **MetaHuman +0, SequencerAnimMixer +0**), the highest-DX official plugin is `AIAssistant` (EDA — editor context), two official out-of-band channels cover MCP's blind spots (`CmdLinkServer`, Python remote execution), and `find_actors.collision_channels` is an enum array (G19).
 
-**Capability boundaries (verified 2026-08-28, 67 toolsets live)**: Landscape sculpt/paint = NO toolset (VibeUE adds it); vertex-level mesh Modeling Mode = NO; IK Retargeter (skeleton retarget) = NO (component-level SkeletalMeshAsset/AnimClass swap auto-rebinds compatible skeletons); AnimBP state-machine graphs = no dedicated toolset (AnimBP EventGraph via BlueprintTools `[UNVERIFIED]`; state/blend params settable via ObjectTools). Everything else above is directly callable.
+**Capability boundaries (inventory verified 2026-09-24, 52 toolsets live on UE 5.8.3)**: Landscape sculpt/paint = NO toolset (VibeUE adds it); vertex-level mesh Modeling Mode = NO; IK Retargeter (skeleton retarget) = NO (component-level SkeletalMeshAsset/AnimClass swap auto-rebinds compatible skeletons); AnimBP state-machine graphs = no dedicated toolset (AnimBP EventGraph via BlueprintTools `[UNVERIFIED]`; state/blend params settable via ObjectTools). Everything else above is directly callable.
 
 ## When to Use What
 

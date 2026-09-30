@@ -10,8 +10,9 @@
   drift flagged by pilot QA 2026-08-29 ("domain docs duplicate schema rows").
 
   -Live (UE must be running on $McpUrl): additionally pulls describe_toolset from the live
-  server and diffs live params vs tool_schemas.md. [Live path UNVERIFIED 2026-08-30 - UE was
-  offline during rewrite; structure follows the previously working v1 logic.]
+  server and diffs live params vs tool_schemas.md. Diff is toolset-aware (keyed
+  "<toolset>::<tool>") because bare tool names collide across toolsets, and it brace-matches
+  the schema so nested option objects are not truncated. [VERIFIED 2026-09-24 UE5.8.3-EN]
 
   Usage:
     powershell -File refresh_schemas.ps1            # offline cross-check only
@@ -136,15 +137,73 @@ Write-Output ("--- offline summary: {0} DRIFT, {1} WARN, {2} single-source INFO 
 if ($drift -gt 0) { Write-Output "ACTION: fix DRIFT rows first (same tool, disjoint params = one side is stale)." }
 
 # --- optional live pull & diff against tool_schemas.md ---
+
+# Extract a brace-balanced JSON object starting at the first '{' at/after $From.
+# The old non-greedy regex ('\{"type":"object".*?\}') stopped at the FIRST closing
+# brace, truncating any nested option object - that produced phantom drift on
+# tools like StartPIE (whose only top-level param is `options`).
+function Get-BracedJson([string]$Text, [int]$From) {
+    $k = $Text.IndexOf('{', $From)
+    if ($k -lt 0) { return $null }
+    $depth = 0
+    for ($p = $k; $p -lt $Text.Length; $p++) {
+        $ch = $Text[$p]
+        if ($ch -eq '{') { $depth++ }
+        elseif ($ch -eq '}') {
+            $depth--
+            if ($depth -eq 0) { return $Text.Substring($k, $p - $k + 1) }
+        }
+    }
+    return $null
+}
+
+# JSON-Schema keywords are structure, not parameters.
+$script:SchemaKeywords = @('properties', 'required', 'type', 'title', 'description',
+                           'items', 'additionalProperties', 'default')
+
+# Top-level parameter names = keys directly under "properties".
+function Get-TopLevelProps([string]$Schema) {
+    try {
+        $obj = $Schema | ConvertFrom-Json
+        if ($obj.properties) { return @($obj.properties.PSObject.Properties.Name) }
+    } catch { }
+    return @()
+}
+
+# Property names at ANY depth (nested option/struct fields included), minus schema
+# keywords - so a recorded nested param like playMode is not reported as missing.
+function Get-AllProps([string]$Schema) {
+    $names = @([regex]::Matches($Schema, '"([A-Za-z0-9_]+)"\s*:\s*\{') |
+               ForEach-Object { $_.Groups[1].Value })
+    return @($names | Where-Object { $script:SchemaKeywords -notcontains $_ } | Select-Object -Unique)
+}
+
 if ($Live) {
     Write-Output ""
     Write-Output "=== LIVE PULL: describe_toolset x $($Toolsets.Count) (UE must be running) ==="
     $initBody = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"codely","version":"1.0"}}}'
-    $r1 = Invoke-WebRequest -Uri $McpUrl -Method POST -Body $initBody -ContentType "application/json" -UseBasicParsing -TimeoutSec 10
-    $sid = $r1.Headers["Mcp-Session-Id"]
-    $h = @{ "Content-Type" = "application/json"; "Mcp-Session-Id" = $sid }
-    Invoke-WebRequest -Uri $McpUrl -Method POST -Body '{"jsonrpc":"2.0","method":"notifications/initialized"}' -ContentType "application/json" -Headers $h -TimeoutSec 5 | Out-Null
+    try {
+        $r1 = Invoke-WebRequest -Uri $McpUrl -Method POST -Body $initBody -ContentType "application/json" -UseBasicParsing -TimeoutSec 10
+    } catch {
+        Write-Output ("initialize FAILED: {0}" -f $_.Exception.Message)
+        Write-Output "ACTION: start UE with -ModelContextProtocolStartServer, then re-run with -Live."
+        exit 0
+    }
+    $sid = $null
+    foreach ($k in $r1.Headers.Keys) { if ($k -ieq "Mcp-Session-Id") { $sid = $r1.Headers[$k] } }
+    $h = @{ "Content-Type" = "application/json" }
+    if ($sid) { $h["Mcp-Session-Id"] = $sid }
+    # PS 5.1 quirk: the notification replies with an EMPTY body and
+    # Invoke-WebRequest throws NullReferenceException on it. Harmless - ignore.
+    try {
+        Invoke-WebRequest -Uri $McpUrl -Method POST -Body '{"jsonrpc":"2.0","method":"notifications/initialized"}' -ContentType "application/json" -Headers $h -TimeoutSec 5 | Out-Null
+    } catch {
+        Write-Output "(note: notifications/initialized returned an empty body - expected on PS 5.1, continuing)"
+    }
 
+    # keyed "<toolset>::<tool>" - a bare tool name is NOT unique across toolsets
+    # (create / add_variable / connect_pins / get_graph / list_variables all collide),
+    # so a global by-name map produced false DRIFTs against the wrong toolset.
     $liveMap = @{}
     foreach ($ts in $Toolsets) {
         $argsJson = '{"toolset_name":"' + $ts + '"}'
@@ -152,37 +211,66 @@ if ($Live) {
         try {
             $r = Invoke-WebRequest -Uri $McpUrl -Method POST -Body $body -ContentType "application/json" -Headers $h -UseBasicParsing -TimeoutSec 120
             $text = ($r.Content | ConvertFrom-Json).result.content[0].text
-            $sigMatches = [regex]::Matches($text, '"name"\s*:\s*"([^"]+)"\s*,\s*"inputSchema"\s*:\s*(\{"type":"object".*?\})')
-            foreach ($m in $sigMatches) {
-                $n = $m.Groups[1].Value.Split('.')[-1]
-                $props = [regex]::Matches($m.Groups[2].Value, '"([A-Za-z0-9_]+)"\s*:\s*\{') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
-                $liveMap[$n] = @($props)
+            $found = 0
+            foreach ($m in [regex]::Matches($text, '"name"\s*:\s*"' + [regex]::Escape($ts) + '\.([A-Za-z0-9_]+)"')) {
+                $tool = $m.Groups[1].Value
+                $schemaAt = $text.IndexOf('"inputSchema"', $m.Index)
+                if ($schemaAt -lt 0) { continue }
+                $schema = Get-BracedJson $text $schemaAt
+                if (-not $schema) { continue }
+                $liveMap[$ts + '::' + $tool] = @{
+                    Top = @(Get-TopLevelProps $schema)
+                    All = @(Get-AllProps $schema)
+                }
+                $found++
             }
-            Write-Output ("{0}: {1} tools parsed" -f $ts, $sigMatches.Count)
+            Write-Output ("{0}: {1} tools parsed" -f $ts, $found)
         } catch {
             Write-Output ("{0} FAILED: {1}" -f $ts, $_.Exception.Message)
         }
     }
 
     Write-Output ""
-    Write-Output "=== LIVE vs tool_schemas.md diff ==="
-    $ld = 0; $lw = 0
-    foreach ($t in ($liveMap.Keys | Sort-Object)) {
-        if ($schemas.ContainsKey($t)) {
-            $lp = @($liveMap[$t]); $sp = @($schemas[$t])
-            $inter = @($lp | Where-Object { $sp -contains $_ })
-            if ($inter.Count -eq 0 -and $lp.Count -gt 0 -and $sp.Count -gt 0) {
-                Write-Output ("LIVE-DRIFT  {0}: live=[{1}] schemas=[{2}]" -f $t, ($lp -join ','), ($sp -join ',')); $ld++
-            } else {
-                $onlyL = @($lp | Where-Object { $sp -notcontains $_ })
-                if ($onlyL.Count -gt 0) { Write-Output ("LIVE-WARN   {0}: live-only params [{1}] (schemas may omit optionals)" -f $t, ($onlyL -join ',')); $lw++ }
-            }
+    Write-Output "=== LIVE vs tool_schemas.md diff (toolset-aware) ==="
+    $exact = 0; $ld = 0; $lw = 0; $linfo = 0
+    foreach ($t in ($schemas.Keys | Sort-Object)) {
+        $owners = @($liveMap.Keys | Where-Object { $_.EndsWith('::' + $t) } | Sort-Object)
+        if ($owners.Count -eq 0) {
+            Write-Output ("LIVE-INFO   {0}: not exposed by any probed toolset" -f $t)
+            $linfo++
+            continue
+        }
+        $sp = @($schemas[$t])
+        $matched = $false; $superset = $false; $detail = @()
+        foreach ($key in $owners) {
+            $lpTop = @($liveMap[$key].Top)
+            $lpAll = @($liveMap[$key].All)
+            # a recorded param counts as present if it is a TOP-LEVEL param, or a
+            # nested field (docs abbreviate nested struct/option fields). Top-level
+            # is checked first because a real param may share a name with a schema
+            # keyword (find_nodes has a `title` param; get_properties has `properties`).
+            $missing = @($sp | Where-Object { $lpTop -notcontains $_ -and $lpAll -notcontains $_ })
+            # only genuinely new TOP-LEVEL params are worth reporting
+            $extraTop = @($lpTop | Where-Object { $sp -notcontains $_ })
+            if ($missing.Count -eq 0 -and $extraTop.Count -eq 0) { $matched = $true }
+            elseif ($missing.Count -eq 0) { $superset = $true }
+            $short = ($key -split '::')[0]
+            $detail += ("[{0}] live=[{1}]{2}" -f ($short.Split('.')[-1]), ($lpTop -join ','),
+                        $(if ($missing.Count -gt 0) { " missing=[$($missing -join ',')]" } else { "" }))
+        }
+        if ($matched) { $exact++ }
+        elseif ($superset) {
+            Write-Output ("LIVE-WARN   {0}: live adds optional params (doc omits them) {1}" -f $t, ($detail -join ' '))
+            $lw++
         } else {
-            Write-Output ("LIVE-INFO   {0}: not in tool_schemas.md" -f $t)
+            $tag = if ($owners.Count -gt 1) { "LIVE-DRIFT*" } else { "LIVE-DRIFT " }
+            Write-Output ("{0} {1}: recorded=[{2}] {3}" -f $tag, $t, ($sp -join ','), ($detail -join ' '))
+            $ld++
         }
     }
-    Write-Output ("--- live summary: {0} DRIFT, {1} WARN ---" -f $ld, $lw)
-    Write-Output "NOTE: live pull is best-effort regex parsing [UNVERIFIED path]; treat LIVE-DRIFT as investigate, not gospel."
+    Write-Output ("--- live summary: {0} exact, {1} DRIFT, {2} WARN, {3} absent ---" -f $exact, $ld, $lw, $linfo)
+    Write-Output "NOTE: '*' = the tool name exists in several probed toolsets (name collision); listed owners are alternatives, not simultaneous conflicts."
+    Write-Output "NOTE: live parsing is regex+brace-matching over describe_toolset text; treat LIVE-DRIFT as investigate, not gospel."
 } else {
     Write-Output ""
     Write-Output "(offline mode only - add -Live with UE running to also diff live server schemas)"

@@ -17,7 +17,7 @@
 |---|---|
 | `SceneTools.add_to_scene_from_asset` | asset_path, name, xform{location,rotation,scale} [, parent, snap_to_ground] |
 | `add_to_scene_from_class` | actor_type_ref, name, xform |
-| `find_actors` | name(substring), tag, collision_channels (all required) |
+| `find_actors` | name(substring), tag, collision_channels, actor_type, bounds, root — first three required, last three optional (5.8.3). ⚠ `collision_channels` is an ENUM array: `[]` or `[0]` work, `["WorldStatic"]` FAILS `[VERIFIED 2026-09-25 UE5.8.3-EN]` |
 | `remove_from_scene` | actor:ref |
 | `trace_world` | start{x,y,z}, end → DISTANCE (ground_z = start.z − dist) |
 | `get_current_level` / `load_level` | {} / level_path (fails on unsaved changes) |
@@ -28,6 +28,7 @@
 
 ## 4. Laws (domain)
 - **G11 Scene placement reality (#20 #24 #44)**: trace_world BEFORE placing (OpenWorld terrain buries actors, z≈450 at origin!); PIE instances live at `/Memory/UEDPIE_N_` paths; PlayerStart-first placement.
+- **G20 [Flow] Adding a level leaks its WORLD-GLOBAL actors — classic symptom: the host scene goes black** `[VERIFIED 2026-09-29 UE5.8.3-EN — diagnosed from a package scan; the fix was confirmed by the user in-editor]`: bringing another level in (Level Instance / streaming level / simply dragging the `.umap` into the viewport) also brings that level's world-wide actors. The usual killer is a **PostProcessVolume with `Infinite Extent (Unbound)` = true** — an unbound volume applies to the WHOLE world regardless of where it sits, so the incoming level's `bOverride_AutoExposure*` / `AutoExposureMin-MaxBrightness` / colour-grading overrides replace the host scene's exposure and it renders black. Same leak class: unbound lights, sky atmosphere, height fog, reflection captures. **Fix: on the incoming level's PP volume, uncheck Infinite Extent and scale it to cover only its own area (and/or clear the exposure overrides) — or delete it.** That works for EVERY transfer method, Level Instance included. Avoid-carry matrix: **Packed Level Actor / Blueprint-Actor (mesh components only) / Merge Actors carry geometry only**; **Level Instance and "drag the .umap in" carry everything**. Cheap pre-diagnosis without opening the editor: scan the source level's packages for `PostProcessVolume` + `bUnbound` — in a World Partition level it lives under `__ExternalActors__/`, while the persistent `.umap` may hold only `WorldSettings`.
 - Cross-domain: G3 (level save untrustworthy), G9 (stale instance refs), G12 (live actor refs for actor-typed params).
 
 ## 5. Recipes

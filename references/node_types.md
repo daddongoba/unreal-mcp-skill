@@ -6,6 +6,13 @@ UE 5.8 English locale node `type_id` strings. Use these directly in `create_node
 
 **Offline lookup FIRST**: for any node not in the tables below, run `scripts/search_node_dict.ps1 -Query <name>` [-Exact] — it searches the merged node dictionary + `references/node_dict_extras.json` and prints pins/defaults. Remember the namespace law: dictionary `display_name`/`category` fields may differ from tool type_ids; verify candidate ids with `find_node_types` before `create_node` when the entry came from the dictionary. Only fall back to runtime probing when offline lookup returns 0 hits.
 
+**⚠ KNOWN OFFLINE-DICTIONARY GAPS** `[VERIFIED 2026-09-24 UE5.8.3-EN]`: `search_node_dict.ps1` returns
+0 hits for nodes that are flow-control K2Nodes or live in libraries the dictionary never indexed —
+confirmed missing: the whole **Switch family** (`SwitchonInt/Name/String`) and
+`Utilities|Time|SetTimerbyFunctionName`. These all exist live (`find_node_types` finds them). So a
+0-hit result is NOT evidence that a node does not exist — probe with `find_node_types` before
+concluding. (The Switch ids are also recorded in the Flow Control table above.)
+
 ## How to Discover Node Types
 
 ```python
@@ -113,6 +120,14 @@ Tool type_ids [live-probed 2026-09-06 — ALL under `Utilities|FlowControl|`, NO
 | Delay | `Utilities\|FlowControl\|Delay` (also `RetriggerableDelay`, `DelayUntilNextTick`, `DelayUntilNextFrame`) | WorldContextObject Duration:float LatentInfo |
 | Switch on Int / Name / String | `Utilities\|FlowControl\|Switch\|SwitchonInt` (lowercase 'on'; same for SwitchonName/SwitchonString) | Selection |
 | DoOnce / DoN / FlipFlop / Gate / MultiGate | `Utilities\|FlowControl\|DoOnce` etc. | |
+
+**⚠ THE ENGINE'S OWN DSL DOCS ARE WRONG ABOUT SWITCH** `[VERIFIED 2026-09-24 UE5.8.3-EN]`:
+`get_graph_dsl_docs` (the in-engine grammar reference) states `int → Utilities|FlowControl|SwitchOnInt`.
+That id does **not** exist. Live `find_node_types` on 5.8.3 returns
+`Utilities|FlowControl|Switch|SwitchonInt` — extra `Switch|` segment and lowercase `on`. The same
+applies to `SwitchonName` / `SwitchonString`. The DSL alias `(switch int …)` itself works (the parser
+expands it internally); only the **manually written full type_id** fails. Trust this table over
+`get_graph_dsl_docs` for Switch nodes.
 
 ## Development
 
