@@ -1,0 +1,86 @@
+# unreal-mcp-skill
+
+[English](README.md) · **简体中文**
+
+> 一个经过实战检验的 **Codely CLI 技能**，通过编辑器内置的 MCP 服务器驱动 **Unreal Engine 5.8+** —— 蓝图编写、场景搭建、材质、Niagara、Sequencer、PCG 等，全部用自然语言完成。
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+## 这是什么
+
+一个知识密集型的技能（不是插件——不含引擎代码），面向通过 Epic 的 **ModelContextProtocol** 工具集操作 UE 的 [Codely CLI](https://codely-docs.tuanjie.cn) 智能体（启用 AllToolsets 时共 67 个工具集）：
+
+- **蓝图 DSL 工作流** —— 创建蓝图、变量、函数、跨蓝图调用、编译、PIE 验证；一套类 Scheme 的 DSL（`write_graph_dsl`），含 27 条实战验证过的语法法则
+- **场景 / 物理 / 碰撞** —— 组件选取规则、触发器模式、运行时物理激活
+- **材质 / UMG / Niagara / Sequencer / PCG / ControlRig / 骨骼网格** —— 每个领域都有验证过的流程
+- **一键连接（One-Click Connect）** —— `ue_connect.py` 自动诊断编辑器/端口/插件状态并帮你启动 UE（对新手友好）
+- **踩坑法则库** —— 从真实故障复盘提炼出的 17 组法则（G1-G17）：调色板名与工具 id 的命名空间差异、Cast 节点命名陷阱、中文语言环境的显示名本地化、幽灵端口占用……
+- **离线节点字典 + 检索工具** —— 1665 个节点的字典 + PIE 验证过的补充节点，秒级检索
+
+每条规则都带有可信度标签：`[VERIFIED <日期> UE<版本>-<语言>]`（经 PIE 验证）、`[DOC]`（来自官方文档）或 `[UNVERIFIED]`（未验证）。
+
+## 快速开始
+
+1. **安装技能** —— 把本目录复制到你的 Codely 技能目录：
+   ```
+   Windows: C:\Users\<你>\.codely-cli\skills\unreal-mcp
+   macOS:   ~/.codely-cli/skills/unreal-mcp
+   ```
+2. **准备一个 UE5.8+ 项目**，其 `.uproject` 需启用以下插件（技能可在你同意后自动添加）：
+   `ModelContextProtocol` · `ToolsetRegistry` · `EditorToolset` · `PythonScriptPlugin` · `AllToolsets`
+3. **启动 Codely 直接说需求** —— 例如「连上 UE」/「connect to UE」。智能体会执行 `scripts/ue_connect.py check`（诊断），然后 `launch` + `wait`（首次加载约 4.5 分钟）—— 详见 SKILL.md 的 *One-Click Connect* 一节。
+
+> 启动顺序很重要：**先开 UE，再开 Codely**（Codely 只会在自身启动时发现 MCP 工具）。即使顺序搞反了，技能里的 `mcp_call.py` 兜底方案也能让你继续干活。
+
+## ⚠️ 已知限制：请使用英文版编辑器界面
+
+本技能是基于 **英文（EN）编辑器语言** 的 UE 5.8 验证的。
+通过 MCP 驱动编辑器时，**不要**把编辑器切成中文（或其他本地化界面）：
+
+- 节点的 `type_id` 是按调色板/注册表名称匹配的。在本地化编辑器里，部分类别会被改名（例如 Cast 类别 `Utilities|Casting|` 在中文编辑器里显示为 `工具|Casting|`），导致按 id 创建节点静默失败。
+- 本仓库中每条已验证的规则都标注为 `[VERIFIED ... UE5.8-EN]` —— 仅在英文语言环境的编辑器上验证过。
+
+**如果你的编辑器是中文**：通过 `Edit → Editor Preferences → Region & Language → Editor Language = English` 切换，然后重启编辑器。注意控制台命令 `culture = en` **无效** —— 它不会影响蓝图节点的显示名（详见 `references/ue_conventions.md` 第 10 节）。
+
+## 平台支持
+
+| | Windows | macOS |
+|---|---|---|
+| 启动编辑器 | `UnrealEditor.exe` | `.app` 内部二进制 —— 见 `references/platform-macos.md` |
+| 辅助脚本 | PowerShell 版（`.ps1`） | Python 版（`.py`，仅用标准库） |
+| MCP 层 | 完全一致（端口 8000，HTTP JSON-RPC） | 完全一致 |
+
+## 仓库结构
+
+```
+SKILL.md                     # 路由表 + 法则库（G1-G17）+ 各类协议 —— 从这里开始读
+references/
+  capabilities/*.md          # 11 个分领域能力文档（设计规则 + 工具参数）
+  dsl_syntax.md              # DSL 语法 R1-R27 及验证过的示例
+  node_types.md              # 节点 type_id 参考（命名空间法则）
+  ue_conventions.md          # 设计期知识（组件/碰撞/UI/中文语言环境）
+  node_dict_extras.json      # 主字典中缺失、但经 PIE 验证的节点
+  node_dictionary_merged.json# 1665 个节点的引擎字典（可检索，不建议通读）
+  platform-macos.md          # macOS 环境对应说明
+  few_shots.md               # 行为案例（该问/该拒绝/各类门禁）
+  history/                   # 测试成果 + 一个真实故障案例复盘
+  templates/                 # 17 个验证过的工作流模板（要改着用，别照抄）
+scripts/
+  ue_connect.py              # 一键连通性（check/launch/wait/all）
+  mcp_call.py / .ps1         # MCP HTTP 调用器（参数走文件，免去转义地狱）
+  search_node_dict.py / .ps1 # 离线节点/引脚检索
+  refresh_schemas.py / .ps1  # schema 漂移守卫（离线交叉校验 + --live）
+  bp_template.py, verify_bp.py, import_asset.ps1 ...
+```
+
+## 语言
+
+技能内容以英文为主，同时保留中文触发词（该技能诞生于中英混合的工作流——中文用户可以直接说「连不上」「帮我打开项目」这类原生说法）。欢迎使用任意一种语言贡献。
+
+## 贡献
+
+本技能是自维护的：凡是被诊断并验证过的失败，都会被沉淀为法则条目（见 SKILL.md 的 *Self-Maintenance Protocol*）。最有价值的 PR 是来自真实 PIE 运行的 `[VERIFIED]` 经验。
+
+## 许可
+
+[MIT](LICENSE) —— 覆盖知识库、脚本与模板。Unreal Engine 是 Epic Games, Inc. 的商标；本项目与 Epic Games 无隶属关系，也未获其背书。

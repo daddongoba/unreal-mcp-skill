@@ -1,5 +1,7 @@
 # unreal-mcp-skill
 
+**English** · [简体中文](README.zh-CN.md)
+
 > A battle-tested **Codely CLI skill** that drives **Unreal Engine 5.8+** through the editor's built-in MCP server — blueprint authoring, scene building, materials, Niagara, Sequencer, PCG and more, all from natural language.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
